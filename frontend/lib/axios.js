@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const axiosInstance = axios.create({
-  baseURL: process.env.API_URL || "https://netflix-clone-4lnu.onrender.com",
+  baseURL: process.env.API_URL || "https://netflix-clone-4lnu.onrender.com/api",
 });
 axiosInstance.interceptors.request.use(
   (config) => {
