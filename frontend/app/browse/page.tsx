@@ -4,6 +4,7 @@ import Footer from "@/components/Footer";
 import HeroBanner from "@/components/HeroBanner";
 import MovieDetailModal from "@/components/MovieDetailModal";
 import MovieRow from "@/components/MovieRow";
+import ContinueWatchingRow from "@/components/ContinueWatchingRow";
 import Navbar from "@/components/Navbar";
 import { useAuth } from "@/context/Authcontext";
 import axiosInstance from "@/lib/axios";
@@ -140,6 +141,7 @@ const page = () => {
       <main className="relative">
         <HeroBanner movie={featuredMovie} onMoreInfo={handleSelectMovie} />
         <div className=" relative z-20 -mt-16 md:-mt-32 pb-12">
+          <ContinueWatchingRow />
           {!recommendationLoading && selectedProfile && recommendationsProfileId === selectedProfile._id && recommendedMovies.length > 0 && (
             <MovieRow
               title="Recommeneded For You"

@@ -18,10 +18,14 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+const PROGRESS_SAVE_INTERVAL_MS = 12_000;
+
 type VideoPlayerProps = {
   src: string;
   poster: string;
   title: string;
+  initialProgressSeconds: number;
+  onProgressUpdate: (progressSeconds: number) => Promise<unknown>;
   onExit: () => void;
 };
 
@@ -40,6 +44,8 @@ export default function VideoPlayer({
   src,
   poster,
   title,
+  initialProgressSeconds,
+  onProgressUpdate,
   onExit,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -58,10 +64,61 @@ export default function VideoPlayer({
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resumeInitializedRef = useRef(false);
+  const progressSaveStateRef = useRef({
+    lastAttemptAt: 0,
+    lastSuccessfulProgress: null as number | null,
+    inFlight: false,
+    pending: null as { progress: number; force: boolean } | null,
+  });
+  const saveProgressRef = useRef<(force?: boolean, progressOverride?: number) => void>(() => {});
+
+  const saveProgress = useCallback((force = false, progressOverride?: number) => {
+    if (!resumeInitializedRef.current) return;
+    const video = videoRef.current;
+    const rawProgress = progressOverride ?? video?.currentTime;
+    if (typeof rawProgress !== "number" || !Number.isFinite(rawProgress) || rawProgress < 0) return;
+
+    const progress = Math.floor(rawProgress);
+    const saveState = progressSaveStateRef.current;
+    if (saveState.inFlight) {
+      saveState.pending = { progress, force: force || Boolean(saveState.pending?.force) };
+      return;
+    }
+
+    const now = Date.now();
+    if (progress === saveState.lastSuccessfulProgress) return;
+    if (!force && now - saveState.lastAttemptAt < PROGRESS_SAVE_INTERVAL_MS) return;
+
+    saveState.inFlight = true;
+    saveState.lastAttemptAt = now;
+    Promise.resolve()
+      .then(() => onProgressUpdate(progress))
+      .then(() => {
+        saveState.lastSuccessfulProgress = progress;
+      })
+      .catch(() => {
+        // Playback remains uninterrupted when progress persistence is unavailable.
+      })
+      .finally(() => {
+        saveState.inFlight = false;
+        const pending = saveState.pending;
+        saveState.pending = null;
+        if (
+          pending &&
+          pending.progress !== saveState.lastSuccessfulProgress &&
+          (pending.force || Date.now() - saveState.lastAttemptAt >= PROGRESS_SAVE_INTERVAL_MS)
+        ) {
+          saveProgressRef.current(pending.force, pending.progress);
+        }
+      });
+  }, [onProgressUpdate]);
+
+  saveProgressRef.current = saveProgress;
 
   const togglePlay = useCallback(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || !resumeInitializedRef.current) return;
     if (video.paused) {
       video.play();
     } else {
@@ -78,7 +135,7 @@ export default function VideoPlayer({
 
   const skip = (seconds: number) => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || !resumeInitializedRef.current) return;
     video.currentTime = Math.max(
       0,
       Math.min(video.duration, video.currentTime + seconds),
@@ -96,7 +153,7 @@ export default function VideoPlayer({
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     const video = videoRef.current;
-    if (!video || !duration) return;
+    if (!video || !duration || !resumeInitializedRef.current) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = (e.clientX - rect.left) / rect.width;
     video.currentTime = pct * duration;
@@ -127,12 +184,39 @@ export default function VideoPlayer({
     if (!video) return;
 
     const onPlay = () => setPlaying(true);
-    const onPause = () => setPlaying(false);
-    const onTimeUpdate = () => setCurrentTime(video.currentTime);
-    const onLoadedMetadata = () => {
-      setDuration(video.duration);
-      setLoading(false);
+    const onPause = () => {
+      setPlaying(false);
+      saveProgressRef.current(true);
     };
+    const onTimeUpdate = () => {
+      if (!resumeInitializedRef.current) return;
+      setCurrentTime(video.currentTime);
+      saveProgressRef.current(false);
+    };
+    const onLoadedMetadata = () => {
+      if (resumeInitializedRef.current) return;
+      setDuration(video.duration);
+      const requestedProgress = Number.isFinite(initialProgressSeconds) && initialProgressSeconds >= 0
+        ? initialProgressSeconds
+        : 0;
+      const safeProgress = Number.isFinite(video.duration) && video.duration > 0
+        ? Math.min(requestedProgress, Math.max(0, video.duration - 1))
+        : requestedProgress;
+      try {
+        video.currentTime = safeProgress;
+      } catch {
+        video.currentTime = 0;
+      }
+      setCurrentTime(video.currentTime);
+      resumeInitializedRef.current = true;
+      progressSaveStateRef.current.lastAttemptAt = Date.now();
+      progressSaveStateRef.current.lastSuccessfulProgress = video.currentTime > 0
+        ? Math.floor(video.currentTime)
+        : null;
+      setLoading(false);
+      video.play().catch(() => setPlaying(false));
+    };
+    const onEnded = () => saveProgressRef.current(true);
     const onProgress = () => {
       if (video.buffered.length > 0) {
         setBuffered(video.buffered.end(video.buffered.length - 1));
@@ -153,6 +237,8 @@ export default function VideoPlayer({
     video.addEventListener("waiting", onWaiting);
     video.addEventListener("playing", onPlaying);
     video.addEventListener("volumechange", onVolumeChange);
+    video.addEventListener("ended", onEnded);
+    if (video.readyState >= HTMLMediaElement.HAVE_METADATA) onLoadedMetadata();
 
     return () => {
       video.removeEventListener("play", onPlay);
@@ -163,8 +249,11 @@ export default function VideoPlayer({
       video.removeEventListener("waiting", onWaiting);
       video.removeEventListener("playing", onPlaying);
       video.removeEventListener("volumechange", onVolumeChange);
+      video.removeEventListener("ended", onEnded);
     };
   }, []);
+
+  useEffect(() => () => saveProgressRef.current(true), []);
 
   useEffect(() => {
     const onFullscreenChange = () =>
@@ -233,7 +322,6 @@ export default function VideoPlayer({
         src={src}
         poster={poster}
         className="w-full h-full object-contain"
-        autoPlay
         playsInline
         onClick={(e) => {
           e.stopPropagation();
