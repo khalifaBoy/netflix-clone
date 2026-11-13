@@ -7,6 +7,7 @@ import MovieRow from "@/components/MovieRow";
 import Navbar from "@/components/Navbar";
 import { useAuth } from "@/context/Authcontext";
 import axiosInstance from "@/lib/axios";
+import { api, isRequestCancelled } from "@/lib/api";
 import { allRows, featuredMovie, Movie } from "@/lib/movie";
 import { Suspense, useEffect, useState } from "react";
 
@@ -34,7 +35,7 @@ type ApiMovie = {
   isNew?: boolean;
   isNewRelease?: boolean;
   isTop10?: boolean;
-  videoUrl: string;
+  videoUrl?: string;
   trailerUrl?: string;
   director?: string;
   language?: string;
@@ -46,6 +47,7 @@ const page = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [apiMovies, setApiMovies] = useState<Movie[]>([]);
   const [recommendedMovies, setRecommendedMovies] = useState<Movie[]>([]);
+  const [recommendationsProfileId, setRecommendationsProfileId] = useState<string | null>(null);
   const [recommendationLoading, setRecommendationLoading] = useState(true);
   const [moviesLoading, setMoviesLoading] = useState(true);
   const handleSelectMovie = (movie: Movie) => {
@@ -104,27 +106,33 @@ const page = () => {
     fetchMovies();
   }, []);
   useEffect(() => {
+    let current = true;
     const fetchRecommendations = async () => {
+      setRecommendedMovies([]);
+      setRecommendationsProfileId(null);
       try {
         if (!selectedProfile) return;
         setRecommendationLoading(true);
-        const profileid = selectedProfile?._id;
-        const response = await axiosInstance.get("/recommendations", {
-          params: {
-            profileId: profileid,
-          },
-        });
-        const movies = response.data?.movies || response.data?.data || [];
+        const response = await api.recommendations.list(selectedProfile._id);
+        const movies = response.data.movies || [];
         const formattedMovies = movies.map(formatMovie);
-        setRecommendedMovies(formattedMovies);
+        if (current) {
+          setRecommendedMovies(formattedMovies);
+          setRecommendationsProfileId(selectedProfile._id);
+        }
       } catch (error) {
+        if (!current || isRequestCancelled(error)) return;
         console.error("Failed to fetch recommendations:", error);
         setRecommendedMovies([]);
+        setRecommendationsProfileId(null);
       } finally {
-        setRecommendationLoading(false);
+        if (current) setRecommendationLoading(false);
       }
     };
     fetchRecommendations();
+    return () => {
+      current = false;
+    };
   }, [selectedProfile]);
   return (
     <div className="min-h-screen bg-[#141414] overflow-x-hidden">
@@ -132,7 +140,7 @@ const page = () => {
       <main className="relative">
         <HeroBanner movie={featuredMovie} onMoreInfo={handleSelectMovie} />
         <div className=" relative z-20 -mt-16 md:-mt-32 pb-12">
-          {!recommendationLoading && recommendedMovies.length > 0 && (
+          {!recommendationLoading && selectedProfile && recommendationsProfileId === selectedProfile._id && recommendedMovies.length > 0 && (
             <MovieRow
               title="Recommeneded For You"
               movies={recommendedMovies}

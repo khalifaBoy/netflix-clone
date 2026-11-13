@@ -23,7 +23,7 @@ type LocalProfile = Profile & { color?: string };
 
 const MAX_PROFILES = 5;
 const page = () => {
-  const { user, profiles, setProfiles, selectProfile } = useAuth();
+  const { user, profiles, updateProfiles, selectProfile } = useAuth();
   const router = useRouter();
   const [profileList, setProfileList] = useState<any[]>([]);
   // const [profileList, setProfileList] =
@@ -42,7 +42,7 @@ const page = () => {
       setLoading(true);
       const response = await axiosInstance.get(`/profiles`);
       const data = response.data;
-      setProfiles(data.profiles);
+      updateProfiles(data.profiles);
       setProfileList(data.profiles);
     } catch (error) {
       console.error("Error fetching profiles:", error);
@@ -84,7 +84,7 @@ const page = () => {
       const createdProfile = response.data;
       const updatedProfile = [...profileList, createdProfile.profile];
       setProfileList(updatedProfile);
-      setProfiles(updatedProfile);
+      updateProfiles(updatedProfile);
     } catch (error) {
       console.error("Error adding profile:", error);
       setError("Failed to add profile. Please try again later.");
@@ -105,7 +105,7 @@ const page = () => {
         (profile) => profile._id !== profileId,
       );
       setProfileList(updatedProfiles);
-      setProfiles(updatedProfiles);
+      updateProfiles(updatedProfiles);
     } catch (error: any) {
       console.error("Delete profile failed:", error);
 

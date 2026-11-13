@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import axiosInstance from "@/lib/axios";
+import { getMediaUrl } from "@/lib/api";
 
 import { allMovies, type Movie } from "@/lib/movie";
 import { cn } from "@/lib/utils";
@@ -55,38 +56,6 @@ type BackendMovie = {
 
   createdAt?: string;
   updatedAt?: string;
-};
-
-/*
-|--------------------------------------------------------------------------
-| API URL
-|--------------------------------------------------------------------------
-|
-| Example:
-| NEXT_PUBLIC_API_URL=http://localhost:5000/api
-|
-*/
-
-const API_ORIGIN = (
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"
-).replace(/\/api\/?$/, "");
-
-/*
-|--------------------------------------------------------------------------
-| Video URL Helper
-|--------------------------------------------------------------------------
-*/
-
-const getVideoUrl = (videoUrl?: string) => {
-  if (!videoUrl) {
-    return "";
-  }
-
-  if (videoUrl.startsWith("http://") || videoUrl.startsWith("https://")) {
-    return videoUrl;
-  }
-
-  return `${API_ORIGIN}${videoUrl.startsWith("/") ? "" : "/"}${videoUrl}`;
 };
 
 /*
@@ -1258,7 +1227,7 @@ const UploadPage = () => {
 
                   {movie.videoUrl && (
                     <video
-                      src={getVideoUrl(movie.videoUrl)}
+                      src={getMediaUrl(movie.videoUrl)}
                       controls
                       preload="metadata"
                       className="w-full bg-black"

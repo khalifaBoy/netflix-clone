@@ -6,6 +6,7 @@ import Navbar from "@/components/Navbar";
 
 import { allMovies, Movie } from "@/lib/movie";
 import axiosInstance from "@/lib/axios";
+import { api, isRequestCancelled } from "@/lib/api";
 
 import { SearchIcon, Loader2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -59,6 +60,7 @@ function SearchPage() {
 
   // API results
   const [searchResults, setSearchResults] = useState<Movie[]>([]);
+  const [searchResultsProfileId, setSearchResultsProfileId] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
 
@@ -105,41 +107,45 @@ function SearchPage() {
   };
 
   useEffect(() => {
+    let current = true;
+    setSearchResults([]);
+    setSearchResultsProfileId(null);
+    setSearchError("");
+    setLoading(false);
     const searchMovies = async () => {
       const searchQuery = query.trim();
       if (!searchQuery || !selectedProfile) {
-        setSearchResults([]);
         return;
       }
       try {
         setLoading(true);
         setSearchError("");
-        const response = await axiosInstance.get("/recommendations/search", {
-          params: {
-            q: searchQuery,
-            profileId: selectedProfile._id,
-          },
-        });
-        const movies = response.data?.movies || response.data?.data || [];
+        const response = await api.recommendations.search(searchQuery, selectedProfile._id);
+        const movies = response.data.movies || [];
         const formattedMovies = movies.map((movie: ApiMovie) =>
           formatMovie(movie),
         );
-        setSearchResults(formattedMovies);
+        if (current) {
+          setSearchResults(formattedMovies);
+          setSearchResultsProfileId(selectedProfile._id);
+        }
       } catch (error: any) {
+        if (!current || isRequestCancelled(error)) return;
         console.error("Search recommendation error:", error);
         setSearchResults([]);
-        setSearchError(
-          error?.response?.data?.message || "Failed to search movies.",
-        );
+        setSearchError(error?.message || "Failed to search movies.");
       } finally {
-        setLoading(false);
+        if (current) setLoading(false);
       }
     };
     const timer = setTimeout(() => {
       searchMovies();
     }, 400);
 
-    return () => clearTimeout(timer);
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
   }, [query, selectedProfile]);
 
   const staticResults = useMemo(() => {
@@ -156,7 +162,10 @@ function SearchPage() {
     );
   }, [query]);
 
-  const results = searchResults.length > 0 ? searchResults : staticResults;
+  const currentProfileResults = selectedProfile?._id === searchResultsProfileId
+    ? searchResults
+    : [];
+  const results = currentProfileResults.length > 0 ? currentProfileResults : staticResults;
 
   const handleSelectMovie = (movie: Movie) => {
     setSelectedMovie(movie);
@@ -232,7 +241,7 @@ function SearchPage() {
                 for "{query}"
               </h2>
 
-              {searchResults.length > 0 && (
+              {currentProfileResults.length > 0 && (
                 <p className="text-white/40 text-xs mt-2">
                   Personalized results based on your search and viewing
                   preferences.

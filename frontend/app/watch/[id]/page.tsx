@@ -3,6 +3,7 @@
 import VideoPlayer from "@/components/VideoPlayer";
 import { useAuth } from "@/context/Authcontext";
 import axiosInstance from "@/lib/axios";
+import { getMediaUrl } from "@/lib/api";
 import { getMovieById } from "@/lib/movie";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -92,17 +93,7 @@ const page = () => {
     );
   }
 
-  const API_ORIGIN = (
-    process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"
-  ).replace(/\/api\/?$/, "");
-
-  const videoUrl =
-    movie.videoUrl?.startsWith("http://") ||
-    movie.videoUrl?.startsWith("https://")
-      ? movie.videoUrl
-      : `${API_ORIGIN}${
-          movie.videoUrl?.startsWith("/") ? "" : "/"
-        }${movie.videoUrl}`;
+  const videoUrl = getMediaUrl(movie.videoUrl);
   return (
     <VideoPlayer
       src={videoUrl}
