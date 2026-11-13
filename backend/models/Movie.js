@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { MAX_MOVIE_DURATION_SECONDS } from "../services/movie-duration.service.js";
 
 const movieSchema = new mongoose.Schema(
   {
@@ -43,6 +44,14 @@ const movieSchema = new mongoose.Schema(
     duration: {
       type: String,
       required: true,
+    },
+
+    durationSeconds: {
+      type: Number,
+      default: null,
+      min: 1,
+      max: MAX_MOVIE_DURATION_SECONDS,
+      validate: (value) => value == null || Number.isInteger(value),
     },
 
     genres: [

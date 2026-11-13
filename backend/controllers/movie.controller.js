@@ -1,5 +1,9 @@
 
 import Movie from "../models/Movie.js";
+import {
+  resolveMovieDurationSecondsOnCreate,
+  resolveMovieDurationSecondsOnUpdate,
+} from "../services/movie-duration.service.js";
 import fs from "fs";
 
 /*
@@ -19,6 +23,7 @@ export const createMovie = async (req, res, next) => {
       year,
       rating,
       duration,
+      durationSeconds,
       genres,
       cast,
       match,
@@ -81,6 +86,7 @@ export const createMovie = async (req, res, next) => {
       year: Number(year),
       rating,
       duration,
+      durationSeconds: resolveMovieDurationSecondsOnCreate(duration, durationSeconds),
       genres: parsedGenres || [],
       cast: parsedCast || [],
       match: Number(match) || 0,
@@ -238,6 +244,7 @@ export const updateMovie = async (req, res, next) => {
       year,
       rating,
       duration,
+      durationSeconds,
       genres,
       cast,
       match,
@@ -250,6 +257,13 @@ export const updateMovie = async (req, res, next) => {
       isPublished,
       releaseDate,
     } = req.body;
+
+    const updatedDurationSeconds = resolveMovieDurationSecondsOnUpdate({
+      currentDisplayDuration: movie.duration,
+      currentDurationSeconds: movie.durationSeconds,
+      nextDisplayDuration: duration,
+      suppliedDurationSeconds: durationSeconds,
+    });
 
     if (title !== undefined) {
       movie.title = title.trim();
@@ -282,6 +296,7 @@ export const updateMovie = async (req, res, next) => {
     if (duration !== undefined) {
       movie.duration = duration;
     }
+    movie.durationSeconds = updatedDurationSeconds;
 
     if (genres !== undefined) {
       movie.genres =

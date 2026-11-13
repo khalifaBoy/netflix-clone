@@ -1,6 +1,8 @@
 import { unlink } from "node:fs/promises";
 import mongoose from "mongoose";
 import ApiError from "../utils/ApiError.js";
+import { MAX_MOVIE_DURATION_SECONDS } from "../services/movie-duration.service.js";
+import { RECOMMENDATION_FEEDBACK_TYPES } from "../models/RecommendationFeedback.js";
 
 const fail = (message, code = "VALIDATION_ERROR") => {
   throw new ApiError(400, code, message);
@@ -102,6 +104,42 @@ export const validateProfileIdBody = validate((req) => {
   requireObjectId(req.body.profileId, "profileId");
 });
 
+export const validateWatchHistoryProgress = validate((req) => {
+  requireRecord(req.body);
+  requireObjectId(req.body.profileId, "profileId");
+  if (Object.hasOwn(req.body, "durationSeconds")
+    || Object.hasOwn(req.body, "completedAt")
+    || Object.hasOwn(req.body, "completed")) {
+    fail("durationSeconds and completion fields are server-controlled");
+  }
+  if (typeof req.body.progressSeconds !== "number"
+    || !Number.isFinite(req.body.progressSeconds)
+    || req.body.progressSeconds < 0) {
+    fail("progressSeconds must be a finite nonnegative number");
+  }
+});
+
+const validateWatchHistoryQueryFields = (req) => {
+  requireObjectId(req.query.profileId, "profileId");
+  if (req.query.limit !== undefined) {
+    if (typeof req.query.limit !== "string" || !/^\d+$/.test(req.query.limit)) {
+      fail("limit must be a positive integer");
+    }
+    const limit = Number(req.query.limit);
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) fail("limit must be between 1 and 50");
+  }
+};
+
+export const validateWatchHistoryQuery = validate(validateWatchHistoryQueryFields);
+export const validateContinueWatchingQuery = validate(validateWatchHistoryQueryFields);
+export const validateWatchHistoryCursor = validate((req) => {
+  validateWatchHistoryQueryFields(req);
+  if (req.query.cursor !== undefined
+    && (typeof req.query.cursor !== "string" || req.query.cursor.length > 256 || !/^[A-Za-z\d_-]+$/.test(req.query.cursor))) {
+    fail("cursor is invalid", "INVALID_CURSOR");
+  }
+});
+
 export const validateMovieListQuery = validate((req) => {
   const { page = "1", limit = "20", search, genre, isNewRelease, isTop10 } = req.query;
   for (const [key, value] of [["page", page], ["limit", limit]]) {
@@ -133,7 +171,7 @@ const normalizeListField = (value, name) => {
   }
 };
 
-const movieFields = ["title", "description", "longDescription", "backdrop", "poster", "year", "rating", "duration", "genres", "cast", "match", "isNewRelease", "isTop10", "trailerUrl", "director", "language", "maturityRating", "isPublished", "releaseDate"];
+const movieFields = ["title", "description", "longDescription", "backdrop", "poster", "year", "rating", "duration", "durationSeconds", "genres", "cast", "match", "isNewRelease", "isTop10", "trailerUrl", "director", "language", "maturityRating", "isPublished", "releaseDate"];
 
 const validateMovieFields = (req, partial) => {
   requireRecord(req.body);
@@ -154,6 +192,16 @@ const validateMovieFields = (req, partial) => {
   for (const [field, options] of Object.entries(stringOptions)) requireString(body[field], field, options);
   requireNumber(body.year, "year", { required: !partial, min: 1888, max: 2200, integer: true });
   requireNumber(body.match, "match", { min: 0, max: 100 });
+  if (body.durationSeconds !== undefined && body.durationSeconds !== null) {
+    if (typeof body.durationSeconds === "string" && !/^\d+$/.test(body.durationSeconds.trim())) {
+      fail("durationSeconds must be a positive integer");
+    }
+    requireNumber(body.durationSeconds, "durationSeconds", {
+      min: 1,
+      max: MAX_MOVIE_DURATION_SECONDS,
+      integer: true,
+    });
+  }
   for (const field of ["isNewRelease", "isTop10", "isPublished"]) requireBoolean(body[field], field);
   normalizeListField(body.genres, "genres");
   normalizeListField(body.cast, "cast");
@@ -176,4 +224,16 @@ export const validateRecommendationQuery = validate((req) => {
 export const validateRecommendationSearchQuery = validate((req) => {
   requireObjectId(req.query.profileId, "profileId");
   requireString(req.query.q, "q", { required: true, min: 1, max: 200 });
+});
+
+export const validateRecommendationFeedbackBody = validate((req) => {
+  requireRecord(req.body);
+  requireObjectId(req.body.profileId, "profileId");
+  if (!RECOMMENDATION_FEEDBACK_TYPES.includes(req.body.type)) {
+    fail("type must be a supported recommendation feedback value");
+  }
+});
+
+export const validateRecommendationFeedbackQuery = validate((req) => {
+  requireObjectId(req.query.profileId, "profileId");
 });

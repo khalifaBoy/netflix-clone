@@ -6,6 +6,7 @@ import profileRoutes from "../routes/profile.routes.js";
 import movieRoutes from "../routes/movie.routes.js";
 import watchlistRoutes from "../routes/watchlist.routes.js";
 import recommendationRoutes from "../routes/recommendation.routes.js";
+import watchHistoryRoutes from "../routes/watch-history.routes.js";
 import { errorHandler, errorResponseContract } from "../middleware/error.middleware.js";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -29,6 +30,7 @@ app.use("/api/movies", movieRoutes);
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 app.use("/api/watchlist", watchlistRoutes);
 app.use("/api/recommendations", recommendationRoutes);
+app.use("/api/watch-history", watchHistoryRoutes);
 
 app.get("/", (req, res) => {
   res.status(200).json({

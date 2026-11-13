@@ -7,6 +7,7 @@ import {
   validateCreateMovie,
   validateMovieListQuery,
   validateRegistration,
+  validateUpdateMovie,
 } from "../middleware/validate.middleware.js";
 import ApiError from "../utils/ApiError.js";
 import movieRoutes from "../routes/movie.routes.js";
@@ -78,6 +79,19 @@ test("validates pagination and multipart movie metadata", async () => {
     file: { path: "/tmp/nonexistent-upload" },
   });
   assert.equal(invalidMovie.passedError.statusCode, 400);
+});
+
+test("validates optional admin durationSeconds as a positive bounded integer", async () => {
+  const valid = await runMiddleware(validateUpdateMovie, { body: { durationSeconds: "5400" } });
+  assert.equal(valid.nextCalled, true);
+
+  for (const durationSeconds of [0, -1, 1.5, "1.5", "1e3", 86401]) {
+    const invalid = await runMiddleware(validateUpdateMovie, { body: { durationSeconds } });
+    assert.equal(invalid.passedError.statusCode, 400, String(durationSeconds));
+  }
+
+  const cleared = await runMiddleware(validateUpdateMovie, { body: { durationSeconds: null } });
+  assert.equal(cleared.nextCalled, true);
 });
 
 test("maps parser and Multer errors and hides unexpected details", () => {
