@@ -73,7 +73,7 @@ const getRecommendationContext = async (profileId) => {
 |
 */
 
-export const getRecommendations = async (req, res) => {
+export const getRecommendations = async (req, res, next) => {
   try {
     const { profileId } = req.query;
 
@@ -381,16 +381,10 @@ ${JSON.stringify(
       movies,
     });
   } catch (error) {
-    console.error("Recommendation error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to generate recommendations",
-      error: process.env.NODE_ENV === "development" ? error.message : undefined,
-    });
+    return next(error);
   }
 };
-export const searchRecommendations = async (req, res) => {
+export const searchRecommendations = async (req, res, next) => {
   try {
     const { q, profileId } = req.query;
 
@@ -776,12 +770,6 @@ ${JSON.stringify(
       movies,
     });
   } catch (error) {
-    console.error("Search recommendation error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to generate search recommendations",
-      error: process.env.NODE_ENV === "development" ? error.message : undefined,
-    });
+    return next(error);
   }
 };

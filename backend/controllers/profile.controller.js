@@ -1,6 +1,6 @@
 import Profile from "../models/Profile.js";
 
-export const getProfiles = async (req, res) => {
+export const getProfiles = async (req, res, next) => {
   try {
     const profiles = await Profile.find({
       user: req.user._id,
@@ -14,16 +14,11 @@ export const getProfiles = async (req, res) => {
       profiles,
     });
   } catch (error) {
-    console.error("Get profiles error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch profiles",
-    });
+    return next(error);
   }
 };
 
-export const getProfile = async (req, res) => {
+export const getProfile = async (req, res, next) => {
   try {
     const { profileId } = req.params;
 
@@ -45,16 +40,11 @@ export const getProfile = async (req, res) => {
       profile,
     });
   } catch (error) {
-    console.error("Get profile error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch profile",
-    });
+    return next(error);
   }
 };
 
-export const createProfile = async (req, res) => {
+export const createProfile = async (req, res, next) => {
   try {
     const {
       name,
@@ -113,16 +103,11 @@ export const createProfile = async (req, res) => {
       profile,
     });
   } catch (error) {
-    console.error("Create profile error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to create profile",
-    });
+    return next(error);
   }
 };
 
-export const updateProfile = async (req, res) => {
+export const updateProfile = async (req, res, next) => {
   try {
     const { profileId } = req.params;
 
@@ -192,16 +177,11 @@ export const updateProfile = async (req, res) => {
       profile,
     });
   } catch (error) {
-    console.error("Update profile error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to update profile",
-    });
+    return next(error);
   }
 };
 
-export const deleteProfile = async (req, res) => {
+export const deleteProfile = async (req, res, next) => {
   try {
     const { profileId } = req.params;
 
@@ -241,16 +221,11 @@ export const deleteProfile = async (req, res) => {
       message: "Profile deleted successfully",
     });
   } catch (error) {
-    console.error("Delete profile error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to delete profile",
-    });
+    return next(error);
   }
 };
 
-export const selectProfile = async (req, res) => {
+export const selectProfile = async (req, res, next) => {
   try {
     const { profileId } = req.params;
 
@@ -273,11 +248,6 @@ export const selectProfile = async (req, res) => {
       profile,
     });
   } catch (error) {
-    console.error("Select profile error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to select profile",
-    });
+    return next(error);
   }
 };

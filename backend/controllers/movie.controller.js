@@ -8,7 +8,7 @@ import fs from "fs";
 |--------------------------------------------------------------------------
 */
 
-export const createMovie = async (req, res) => {
+export const createMovie = async (req, res, next) => {
   try {
     const {
       title,
@@ -100,20 +100,18 @@ export const createMovie = async (req, res) => {
       movie,
     });
   } catch (error) {
-    console.error("Create movie error:", error);
-
     if (req.file) {
       const filePath = req.file.path;
 
       if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
+        try {
+          fs.unlinkSync(filePath);
+        } catch (cleanupError) {
+          console.error("Uploaded movie cleanup failed:", cleanupError);
+        }
       }
     }
-
-    return res.status(500).json({
-      success: false,
-      message: error.message || "Failed to create movie",
-    });
+    return next(error);
   }
 };
 
@@ -123,7 +121,7 @@ export const createMovie = async (req, res) => {
 |--------------------------------------------------------------------------
 */
 
-export const getMovies = async (req, res) => {
+export const getMovies = async (req, res, next) => {
   try {
     const { page = 1, limit = 20, search, genre, isNewRelease, isTop10 } = req.query;
 
@@ -176,12 +174,7 @@ export const getMovies = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Get movies error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch movies",
-    });
+    return next(error);
   }
 };
 
@@ -191,7 +184,7 @@ export const getMovies = async (req, res) => {
 |--------------------------------------------------------------------------
 */
 
-export const getMovie = async (req, res) => {
+export const getMovie = async (req, res, next) => {
   try {
     const { movieId } = req.params;
 
@@ -212,12 +205,7 @@ export const getMovie = async (req, res) => {
       movie,
     });
   } catch (error) {
-    console.error("Get movie error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch movie",
-    });
+    return next(error);
   }
 };
 
@@ -227,7 +215,8 @@ export const getMovie = async (req, res) => {
 |--------------------------------------------------------------------------
 */
 
-export const updateMovie = async (req, res) => {
+export const updateMovie = async (req, res, next) => {
+  let oldVideoPath;
   try {
     const { movieId } = req.params;
 
@@ -346,15 +335,8 @@ export const updateMovie = async (req, res) => {
 
     // Replace video if new video uploaded
     if (req.file) {
-      if (movie.videoUrl) {
-        const oldVideoPath = movie.videoUrl.replace(
-          "/uploads/videos/",
-          "uploads/videos/",
-        );
-
-        if (fs.existsSync(oldVideoPath)) {
-          fs.unlinkSync(oldVideoPath);
-        }
+      if (movie.videoUrl?.startsWith("/uploads/videos/")) {
+        oldVideoPath = movie.videoUrl.slice(1);
       }
 
       movie.videoUrl = `/uploads/videos/${req.file.filename}`;
@@ -362,18 +344,28 @@ export const updateMovie = async (req, res) => {
 
     await movie.save();
 
+    if (oldVideoPath && fs.existsSync(oldVideoPath)) {
+      try {
+        fs.unlinkSync(oldVideoPath);
+      } catch (cleanupError) {
+        console.error("Replaced movie cleanup failed:", cleanupError);
+      }
+    }
+
     return res.status(200).json({
       success: true,
       message: "Movie updated successfully",
       movie,
     });
   } catch (error) {
-    console.error("Update movie error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to update movie",
-    });
+    if (req.file) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (cleanupError) {
+        console.error("Uploaded movie cleanup failed:", cleanupError);
+      }
+    }
+    return next(error);
   }
 };
 
@@ -383,7 +375,7 @@ export const updateMovie = async (req, res) => {
 |--------------------------------------------------------------------------
 */
 
-export const deleteMovie = async (req, res) => {
+export const deleteMovie = async (req, res, next) => {
   try {
     const { movieId } = req.params;
 
@@ -396,36 +388,30 @@ export const deleteMovie = async (req, res) => {
       });
     }
 
-    // Delete video from filesystem
-    if (movie.videoUrl) {
-      const videoPath = movie.videoUrl.replace(
-        "/uploads/videos/",
-        "uploads/videos/",
-      );
+    await Movie.findByIdAndDelete(movieId);
 
+    if (movie.videoUrl?.startsWith("/uploads/videos/")) {
+      const videoPath = movie.videoUrl.slice(1);
       if (fs.existsSync(videoPath)) {
-        fs.unlinkSync(videoPath);
+        try {
+          fs.unlinkSync(videoPath);
+        } catch (cleanupError) {
+          console.error("Deleted movie file cleanup failed:", cleanupError);
+        }
       }
     }
-
-    await Movie.findByIdAndDelete(movieId);
 
     return res.status(200).json({
       success: true,
       message: "Movie deleted successfully",
     });
   } catch (error) {
-    console.error("Delete movie error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to delete movie",
-    });
+    return next(error);
   }
 };
 
 
-export const incrementMovieViews = async (req, res) => {
+export const incrementMovieViews = async (req, res, next) => {
   try {
     const { movieId } = req.params;
 
@@ -456,11 +442,6 @@ export const incrementMovieViews = async (req, res) => {
       views: movie.views,
     });
   } catch (error) {
-    console.error("Increment views error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to update movie views",
-    });
+    return next(error);
   }
 };

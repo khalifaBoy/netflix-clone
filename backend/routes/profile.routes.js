@@ -12,6 +12,11 @@ import {
 } from "../controllers/profile.controller.js";
 
 import protect from "../middleware/auth.middleware.js";
+import {
+  objectIdParam,
+  validateCreateProfile,
+  validateUpdateProfile,
+} from "../middleware/validate.middleware.js";
 
 const router = express.Router();
 
@@ -22,18 +27,18 @@ router.use(protect);
 router.get("/", getProfiles);
 
 // Get single profile
-router.get("/:profileId", getProfile);
+router.get("/:profileId", objectIdParam("profileId"), getProfile);
 
 // Create profile
-router.post("/", createProfile);
+router.post("/", validateCreateProfile, createProfile);
 
 // Update profile
-router.patch("/:profileId", updateProfile);
+router.patch("/:profileId", objectIdParam("profileId"), validateUpdateProfile, updateProfile);
 
 // Delete profile
-router.delete("/:profileId", deleteProfile);
+router.delete("/:profileId", objectIdParam("profileId"), deleteProfile);
 
 // Select profile
-router.post("/:profileId/select", selectProfile);
+router.post("/:profileId/select", objectIdParam("profileId"), selectProfile);
 
 export default router;

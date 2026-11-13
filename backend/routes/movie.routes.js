@@ -11,7 +11,14 @@ import {
 } from "../controllers/movie.controller.js";
 
 import protect from "../middleware/auth.middleware.js";
+import requireAdmin from "../middleware/admin.middleware.js";
 import upload from "../middleware/upload.middleware.js";
+import {
+  objectIdParam,
+  validateCreateMovie,
+  validateMovieListQuery,
+  validateUpdateMovie,
+} from "../middleware/validate.middleware.js";
 
 const router = express.Router();
 
@@ -21,12 +28,12 @@ const router = express.Router();
 |--------------------------------------------------------------------------
 */
 
-router.get("/", getMovies);
+router.get("/", validateMovieListQuery, getMovies);
 
 
-router.get("/:movieId", getMovie);
+router.get("/:movieId", objectIdParam("movieId"), getMovie);
 
-router.post("/:movieId/views", incrementMovieViews);
+router.post("/:movieId/views", objectIdParam("movieId"), incrementMovieViews);
 
 /*
 |--------------------------------------------------------------------------
@@ -37,20 +44,27 @@ router.post("/:movieId/views", incrementMovieViews);
 router.post(
   "/",
   protect,
+  requireAdmin,
   upload.single("video"),
+  validateCreateMovie,
   createMovie
 );
 
 router.patch(
   "/:movieId",
   protect,
+  requireAdmin,
+  objectIdParam("movieId"),
   upload.single("video"),
+  validateUpdateMovie,
   updateMovie
 );
 
 router.delete(
   "/:movieId",
   protect,
+  requireAdmin,
+  objectIdParam("movieId"),
   deleteMovie
 );
 

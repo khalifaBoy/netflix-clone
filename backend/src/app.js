@@ -6,6 +6,7 @@ import profileRoutes from "../routes/profile.routes.js";
 import movieRoutes from "../routes/movie.routes.js";
 import watchlistRoutes from "../routes/watchlist.routes.js";
 import recommendationRoutes from "../routes/recommendation.routes.js";
+import { errorHandler } from "../middleware/error.middleware.js";
 import path from "path";
 import { fileURLToPath } from "url";
 const app = express();
@@ -16,9 +17,9 @@ app.use(cors({
   origin: "*"
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: "100kb" }));
 
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: "100kb", parameterLimit: 100 }));
 app.use(cookieParser());
 
 app.use("/api/auth", authRoutes);
@@ -42,12 +43,6 @@ app.use((req, res) => {
   });
 });
 
-app.use((err, req, res, next) => {
-  console.log(err);
-  res.status(err.statusCODE || 500).json({
-    success: false,
-    message: err.message || "Imternal server error",
-  });
-});
+app.use(errorHandler);
 
 export default app;

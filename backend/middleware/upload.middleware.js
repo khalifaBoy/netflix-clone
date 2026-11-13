@@ -1,6 +1,7 @@
 import multer from "multer";
 import fs from "fs";
 import path from "path";
+import ApiError from "../utils/ApiError.js";
 
 const uploadDirectory = "uploads/videos"; // Specify the directory where uploaded files will be stored
 if (!fs.existsSync(uploadDirectory)) {
@@ -28,7 +29,7 @@ const fileFilter = (req, file, cb) => {
   if (allowedMimeTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error("Invalid file type. Only video files are allowed."), false);
+    cb(new ApiError(415, "UNSUPPORTED_MEDIA_TYPE", "Only supported video files are allowed"), false);
   }
 };
 
@@ -37,6 +38,11 @@ const upload = multer({
   fileFilter: fileFilter,
   limits: {
     fileSize: 100 * 1024 * 1024, // Limit file size to 100MB
+    files: 1,
+    fields: 24,
+    parts: 25,
+    fieldNameSize: 100,
+    fieldSize: 16 * 1024,
   },
 });
 export default upload;

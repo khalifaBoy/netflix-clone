@@ -28,7 +28,7 @@ const getUserProfile = async (profileId, userId) => {
 |--------------------------------------------------------------------------
 */
 
-export const getWatchlist = async (req, res) => {
+export const getWatchlist = async (req, res, next) => {
   try {
     const { profileId } = req.query;
 
@@ -61,12 +61,7 @@ export const getWatchlist = async (req, res) => {
       watchlist,
     });
   } catch (error) {
-    console.error("Get watchlist error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch watchlist",
-    });
+    return next(error);
   }
 };
 
@@ -76,7 +71,7 @@ export const getWatchlist = async (req, res) => {
 |--------------------------------------------------------------------------
 */
 
-export const addToWatchlist = async (req, res) => {
+export const addToWatchlist = async (req, res, next) => {
   try {
     const { profileId } = req.body;
     const { movieId } = req.params;
@@ -142,12 +137,7 @@ export const addToWatchlist = async (req, res) => {
       watchlistItem,
     });
   } catch (error) {
-    console.error("Add watchlist error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to add movie to watchlist",
-    });
+    return next(error);
   }
 };
 
@@ -157,7 +147,7 @@ export const addToWatchlist = async (req, res) => {
 |--------------------------------------------------------------------------
 */
 
-export const removeFromWatchlist = async (req, res) => {
+export const removeFromWatchlist = async (req, res, next) => {
   try {
     const { profileId } = req.body;
     const { movieId } = req.params;
@@ -195,11 +185,6 @@ export const removeFromWatchlist = async (req, res) => {
       message: "Movie removed from watchlist",
     });
   } catch (error) {
-    console.error("Remove watchlist error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to remove movie from watchlist",
-    });
+    return next(error);
   }
 };

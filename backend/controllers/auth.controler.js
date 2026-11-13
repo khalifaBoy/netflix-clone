@@ -13,7 +13,7 @@ const sanitzeUser = (user) => {
   };
 };
 
-export const register = async (req, res) => {
+export const register = async (req, res, next) => {
   try {
     const { name, email, password } = req.body;
     if (!name || !email || !password) {
@@ -33,7 +33,7 @@ export const register = async (req, res) => {
       email: normalizeemail,
     });
     if (existingUser) {
-      return res.status(400).json({
+      return res.status(409).json({
         success: false,
         message: "User already exisits",
       });
@@ -71,14 +71,10 @@ export const register = async (req, res) => {
       profiles,
     });
   } catch (error) {
-    console.log(error.message);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    return next(error);
   }
 };
-export const login = async (req, res) => {
+export const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -95,7 +91,7 @@ export const login = async (req, res) => {
     }).select("+password");
 
     if (!user) {
-      return res.status(400).json({
+      return res.status(401).json({
         success: false,
         message: "Invalid email or password",
       });
@@ -103,7 +99,7 @@ export const login = async (req, res) => {
     const isPasswordvalid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordvalid) {
-      return res.status(400).json({
+      return res.status(401).json({
         success: false,
         message: "Invalid email or password",
       });
@@ -119,7 +115,7 @@ export const login = async (req, res) => {
 
     const token = generateToken(user._id);
 
-    return res.status(201).json({
+    return res.status(200).json({
       success: true,
       message: "Login Successfully",
       token,
@@ -127,20 +123,16 @@ export const login = async (req, res) => {
       profiles,
     });
   } catch (error) {
-    console.log(error.message);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    return next(error);
   }
 };
 
-export const getMe = async (req, res) => {
+export const getMe = async (req, res, next) => {
   try {
     const user=await User.findById(req.user._id)
 
     if (!user) {
-      return res.status(400).json({
+      return res.status(404).json({
         success: false,
         message: "User not found",
       });
@@ -151,17 +143,13 @@ export const getMe = async (req, res) => {
       isActive: true,
     }).sort({ createdAt: 1 });
 
-    return res.status(201).json({
+    return res.status(200).json({
       success: true,
       message: "Login Successfully",
       user: sanitzeUser(user),
       profiles,
     });
   } catch (error) {
-    console.log(error.message);
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    return next(error);
   }
 };
