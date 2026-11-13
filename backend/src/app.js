@@ -6,7 +6,7 @@ import profileRoutes from "../routes/profile.routes.js";
 import movieRoutes from "../routes/movie.routes.js";
 import watchlistRoutes from "../routes/watchlist.routes.js";
 import recommendationRoutes from "../routes/recommendation.routes.js";
-import { errorHandler } from "../middleware/error.middleware.js";
+import { errorHandler, errorResponseContract } from "../middleware/error.middleware.js";
 import path from "path";
 import { fileURLToPath } from "url";
 const app = express();
@@ -21,6 +21,7 @@ app.use(express.json({ limit: "100kb" }));
 
 app.use(express.urlencoded({ extended: true, limit: "100kb", parameterLimit: 100 }));
 app.use(cookieParser());
+app.use(errorResponseContract);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/profiles", profileRoutes);

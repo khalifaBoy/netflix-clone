@@ -1,9 +1,11 @@
 import multer from "multer";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import ApiError from "../utils/ApiError.js";
 
-const uploadDirectory = "uploads/videos"; // Specify the directory where uploaded files will be stored
+const middlewareDirectory = path.dirname(fileURLToPath(import.meta.url));
+const uploadDirectory = path.resolve(middlewareDirectory, "../uploads/videos");
 if (!fs.existsSync(uploadDirectory)) {
   fs.mkdirSync(uploadDirectory, { recursive: true });
 }

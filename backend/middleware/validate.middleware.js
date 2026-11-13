@@ -32,7 +32,7 @@ const requireBoolean = (value, name) => {
 };
 
 const requireObjectId = (value, name) => {
-  if (typeof value !== "string" || !mongoose.Types.ObjectId.isValid(value)) {
+  if (typeof value !== "string" || !/^[a-f\d]{24}$/i.test(value) || !mongoose.Types.ObjectId.isValid(value)) {
     fail(`${name} is invalid`, "INVALID_ID");
   }
 };

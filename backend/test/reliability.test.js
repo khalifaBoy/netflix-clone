@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import multer from "multer";
-import { errorHandler, normalizeError } from "../middleware/error.middleware.js";
+import { errorHandler, errorResponseContract, normalizeError } from "../middleware/error.middleware.js";
 import {
   objectIdParam,
   validateCreateMovie,
@@ -97,14 +97,34 @@ test("maps parser and Multer errors and hides unexpected details", () => {
     console.error = originalConsoleError;
   }
   assert.equal(res.statusCode, 500);
-  assert.deepEqual(res.body, { success: false, message: "Internal server error" });
+  assert.deepEqual(res.body, {
+    success: false,
+    message: "Internal server error",
+    code: "INTERNAL_SERVER_ERROR",
+  });
   assert.equal(JSON.stringify(res.body).includes("database password"), false);
 
   const clientError = new ApiError(422, "BAD_INPUT", "Safe validation message");
   const clientRes = response();
   errorHandler(clientError, {}, clientRes, () => {});
   assert.equal(clientRes.statusCode, 422);
-  assert.deepEqual(clientRes.body, { success: false, message: "Safe validation message" });
+  assert.deepEqual(clientRes.body, {
+    success: false,
+    message: "Safe validation message",
+    code: "BAD_INPUT",
+  });
+});
+
+test("adds stable codes to existing direct controller error responses", () => {
+  const res = response();
+  res.status(404);
+  errorResponseContract({}, res, () => {});
+  res.json({ success: false, message: "Movie not found" });
+  assert.deepEqual(res.body, {
+    success: false,
+    message: "Movie not found",
+    code: "NOT_FOUND",
+  });
 });
 
 test("keeps movie read routes public and guards every catalog write route", () => {
