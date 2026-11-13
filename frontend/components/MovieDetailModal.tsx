@@ -3,7 +3,8 @@
 import { Movie } from "@/lib/movie";
 import { useRouter } from "next/navigation";
 import { Dialog, DialogClose, DialogContent } from "./ui/dialog";
-import { Play, Plus, ThumbsDown, ThumbsUp, Volume2, X } from "lucide-react";
+import { useWatchlist } from "@/context/WatchlistContext";
+import { Check, LoaderCircle, Play, Plus, ThumbsDown, ThumbsUp, Volume2, X } from "lucide-react";
 
 type MovieDetailModalProps = {
   movie: Movie | null;
@@ -17,7 +18,10 @@ const MovieDetailModal = ({
   onOpenChange,
 }: MovieDetailModalProps) => {
   const router = useRouter();
+  const { isInWatchlist, isPending, toggleMovie, operationErrors } = useWatchlist();
   if (!movie) return null;
+  const inWatchlist = isInWatchlist(movie.id);
+  const pending = isPending(movie.id);
   const handlePlay = () => {
     onOpenChange(false);
     router.push(`/watch/${movie.id}`);
@@ -71,10 +75,15 @@ const MovieDetailModal = ({
                   Play
                 </button>
                 <button
-                  className="w-10 h-10 border-2 border-white/60 rounded-full flex items-center justify-center text-white hover:border-white hover:bg-white/10 transition-colors"
-                  aria-label="Add to list"
+                  type="button"
+                  disabled={pending}
+                  onClick={() => void toggleMovie(movie.id)}
+                  className="w-10 h-10 border-2 border-white/60 rounded-full flex items-center justify-center text-white hover:border-white hover:bg-white/10 transition-colors disabled:opacity-50"
+                  aria-label={inWatchlist ? "Remove from My List" : "Add to My List"}
+                  aria-pressed={inWatchlist}
+                  title={operationErrors[movie.id] || (inWatchlist ? "Remove from My List" : "Add to My List")}
                 >
-                  <Plus className="w-5 h-5" />
+                  {pending ? <LoaderCircle className="w-5 h-5 animate-spin" /> : inWatchlist ? <Check className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
                 </button>
                 <button
                   className="w-10 h-10 border-2 border-white/60 rounded-full flex items-center justify-center text-white hover:border-white hover:bg-white/10 transition-colors"
@@ -142,6 +151,9 @@ const MovieDetailModal = ({
           </div>
 
           <div className="px-8 md:px-12 pb-8">
+            {operationErrors[movie.id] && (
+              <p role="alert" className="mb-4 text-sm text-red-300">{operationErrors[movie.id]}</p>
+            )}
             <h3 className="text-white text-xl font-bold mb-4">
               More Like This
             </h3>

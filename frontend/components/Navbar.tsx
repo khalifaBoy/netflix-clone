@@ -157,7 +157,7 @@ const Navbar = () => {
             </Link>
 
             <Link
-              href={`/my-list?p=${selectedProfile?._id || ""}`}
+              href="/my-list"
               className="text-white/70 hover:text-white transition-colors"
             >
               My List

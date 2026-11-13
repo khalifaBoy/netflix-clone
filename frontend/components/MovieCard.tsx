@@ -1,7 +1,8 @@
 "use client";
 
 import { Movie } from "@/lib/movie";
-import { ChevronDown, Play, Plus, ThumbsUp } from "lucide-react";
+import { useWatchlist } from "@/context/WatchlistContext";
+import { Check, ChevronDown, LoaderCircle, Play, Plus, ThumbsUp } from "lucide-react";
 
 type MovieCardProps = {
   movie: Movie;
@@ -9,6 +10,11 @@ type MovieCardProps = {
   rank?: number;
 };
 const MovieCard = ({ movie, onSelect, rank }: MovieCardProps) => {
+  const { isInWatchlist, isPending, toggleMovie, operationErrors } = useWatchlist();
+  const inWatchlist = isInWatchlist(movie.id);
+  const pending = isPending(movie.id);
+  const watchlistError = operationErrors[movie.id];
+
   if (rank) {
     return (
       <div
@@ -31,9 +37,24 @@ const MovieCard = ({ movie, onSelect, rank }: MovieCardProps) => {
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity" />
           <div className="absolute bottom-0 left-0 right-0 p-3 opacity-0 group-hover/card:opacity-100 transition-opacity">
-            <p className="text-white text-sm font-bold truncate">
-              {movie.title}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="min-w-0 flex-1 truncate text-sm font-bold text-white">{movie.title}</p>
+              <button
+                type="button"
+                disabled={pending}
+                aria-label={inWatchlist ? "Remove from My List" : "Add to My List"}
+                aria-pressed={inWatchlist}
+                title={watchlistError || (inWatchlist ? "Remove from My List" : "Add to My List")}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void toggleMovie(movie.id);
+                }}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-white/70 bg-black/40 text-white hover:border-white disabled:opacity-50"
+              >
+                {pending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : inWatchlist ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              </button>
+            </div>
+            {watchlistError && <p role="alert" className="mt-1 text-xs text-red-300">{watchlistError}</p>}
           </div>
         </div>
       </div>
@@ -56,8 +77,19 @@ const MovieCard = ({ movie, onSelect, rank }: MovieCardProps) => {
           <button className="w-8 h-8 bg-white rounded-full flex items-center justify-center hover:bg-white/80 transition-colors">
             <Play className="w-4 h-4 fill-black text-black" />
           </button>
-          <button className="w-8 h-8 border-2 border-white/60 rounded-full flex items-center justify-center text-white hover:border-white transition-colors">
-            <Plus className="w-4 h-4" />
+          <button
+            type="button"
+            disabled={pending}
+            aria-label={inWatchlist ? "Remove from My List" : "Add to My List"}
+            aria-pressed={inWatchlist}
+            title={watchlistError || (inWatchlist ? "Remove from My List" : "Add to My List")}
+            onClick={(event) => {
+              event.stopPropagation();
+              void toggleMovie(movie.id);
+            }}
+            className="w-8 h-8 border-2 border-white/60 rounded-full flex items-center justify-center text-white hover:border-white transition-colors disabled:opacity-50"
+          >
+            {pending ? <LoaderCircle className="w-4 h-4 animate-spin" /> : inWatchlist ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
           </button>
           <button className="w-8 h-8 border-2 border-white/60 rounded-full flex items-center justify-center text-white hover:border-white transition-colors">
             <ThumbsUp className="w-3.5 h-3.5" />
@@ -89,6 +121,7 @@ const MovieCard = ({ movie, onSelect, rank }: MovieCardProps) => {
             </span>
           ))}
         </div>
+        {watchlistError && <p role="alert" className="mt-1 text-xs text-red-300">{watchlistError}</p>}
       </div>
 
       {movie.isNew && (
