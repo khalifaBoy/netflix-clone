@@ -164,6 +164,13 @@ const Navbar = () => {
             </Link>
 
             <Link
+              href="/history"
+              className="text-white/70 hover:text-white transition-colors"
+            >
+              History
+            </Link>
+
+            <Link
               href={`/browse?p=${selectedProfile?._id || ""}`}
               className="text-white/70 hover:text-white transition-colors"
             >
@@ -389,6 +396,14 @@ const Navbar = () => {
                     className="block px-4 py-2 text-sm text-white/70 hover:text-white transition-colors"
                   >
                     Manage Profiles
+                  </Link>
+
+                  <Link
+                    href="/history"
+                    onClick={() => setShowProfile(false)}
+                    className="block px-4 py-2 text-sm text-white/70 hover:text-white transition-colors"
+                  >
+                    Watch History
                   </Link>
 
                   {/* Account */}
