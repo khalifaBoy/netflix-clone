@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PLAYBACK_MEDIA_ERROR_MESSAGE } from "@/lib/playback-session-coordinator.mjs";
 
 const PROGRESS_SAVE_INTERVAL_MS = 12_000;
 
@@ -26,6 +27,7 @@ type VideoPlayerProps = {
   title: string;
   initialProgressSeconds: number;
   onProgressUpdate: (progressSeconds: number) => Promise<unknown>;
+  onRetryPlayback: (progressSeconds: number) => void;
   onExit: () => void;
 };
 
@@ -46,6 +48,7 @@ export default function VideoPlayer({
   title,
   initialProgressSeconds,
   onProgressUpdate,
+  onRetryPlayback,
   onExit,
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -60,6 +63,8 @@ export default function VideoPlayer({
   const [showControls, setShowControls] = useState(true);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [mediaError, setMediaError] = useState(false);
+  const [progressSaveError, setProgressSaveError] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
@@ -96,9 +101,11 @@ export default function VideoPlayer({
       .then(() => onProgressUpdate(progress))
       .then(() => {
         saveState.lastSuccessfulProgress = progress;
+        setProgressSaveError(false);
       })
       .catch(() => {
         // Playback remains uninterrupted when progress persistence is unavailable.
+        setProgressSaveError(true);
       })
       .finally(() => {
         saveState.inFlight = false;
@@ -217,6 +224,12 @@ export default function VideoPlayer({
       video.play().catch(() => setPlaying(false));
     };
     const onEnded = () => saveProgressRef.current(true);
+    const onError = () => {
+      setMediaError(true);
+      setLoading(false);
+      setPlaying(false);
+      saveProgressRef.current(true, video.currentTime);
+    };
     const onProgress = () => {
       if (video.buffered.length > 0) {
         setBuffered(video.buffered.end(video.buffered.length - 1));
@@ -238,6 +251,7 @@ export default function VideoPlayer({
     video.addEventListener("playing", onPlaying);
     video.addEventListener("volumechange", onVolumeChange);
     video.addEventListener("ended", onEnded);
+    video.addEventListener("error", onError);
     if (video.readyState >= HTMLMediaElement.HAVE_METADATA) onLoadedMetadata();
 
     return () => {
@@ -250,6 +264,7 @@ export default function VideoPlayer({
       video.removeEventListener("playing", onPlaying);
       video.removeEventListener("volumechange", onVolumeChange);
       video.removeEventListener("ended", onEnded);
+      video.removeEventListener("error", onError);
     };
   }, []);
 
@@ -329,9 +344,32 @@ export default function VideoPlayer({
         }}
       />
 
+      {progressSaveError && (
+        <p role="alert" className="absolute top-16 left-1/2 z-20 -translate-x-1/2 rounded bg-black/80 px-4 py-2 text-center text-sm text-amber-100">
+          Your playback position could not be saved. It may not be available to resume later.
+        </p>
+      )}
+
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="w-12 h-12 border-4 border-white/20 border-t-red-600 rounded-full animate-spin" />
+        </div>
+      )}
+
+      {mediaError && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/75 px-6">
+          <div className="max-w-md text-center">
+            <p className="mb-5 text-white">
+              {PLAYBACK_MEDIA_ERROR_MESSAGE}
+            </p>
+            <button
+              type="button"
+              onClick={() => onRetryPlayback(videoRef.current?.currentTime ?? initialProgressSeconds)}
+              className="rounded bg-red-600 px-5 py-2 font-semibold text-white hover:bg-red-700"
+            >
+              Retry playback
+            </button>
+          </div>
         </div>
       )}
 

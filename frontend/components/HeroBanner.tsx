@@ -2,17 +2,16 @@
 
 import { Play, Info, Volume2, VolumeX } from "lucide-react";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Movie } from "@/lib/movie";
 
 type HeroBannerProps = {
   movie: Movie;
   onMoreInfo: (movie: Movie) => void;
+  onPlay: (movie: Movie) => void;
 };
 
-export default function HeroBanner({ movie, onMoreInfo }: HeroBannerProps) {
+export default function HeroBanner({ movie, onMoreInfo, onPlay }: HeroBannerProps) {
   const [muted, setMuted] = useState(true);
-  const router = useRouter();
 
   return (
     <div className="relative h-[56.25vw] max-h-[85vh] min-h-[400px] w-full">
@@ -61,7 +60,7 @@ export default function HeroBanner({ movie, onMoreInfo }: HeroBannerProps) {
 
         <div className="flex items-center gap-3 animate-fade-in-up">
           <button
-            onClick={() => router.push(`/watch/${movie.id}`)}
+            onClick={() => onPlay(movie)}
             className="flex items-center gap-2 bg-white text-black px-6 md:px-8 py-2 md:py-2.5 rounded-md font-bold text-base md:text-lg hover:bg-white/80 transition-colors"
           >
             <Play className="w-5 h-5 md:w-6 md:h-6 fill-black" />

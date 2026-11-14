@@ -187,9 +187,12 @@ const validateMovieFields = (req, partial) => {
     trailerUrl: { max: 2048 },
     director: { max: 120 },
     language: { max: 64 },
-    maturityRating: { max: 16 },
+  maturityRating: { max: 16 },
   };
   for (const [field, options] of Object.entries(stringOptions)) requireString(body[field], field, options);
+  if (body.maturityRating !== undefined && !["All", "7+", "13+", "16+", "18+"].includes(body.maturityRating)) {
+    fail("maturityRating is invalid");
+  }
   requireNumber(body.year, "year", { required: !partial, min: 1888, max: 2200, integer: true });
   requireNumber(body.match, "match", { min: 0, max: 100 });
   if (body.durationSeconds !== undefined && body.durationSeconds !== null) {
@@ -236,4 +239,17 @@ export const validateRecommendationFeedbackBody = validate((req) => {
 
 export const validateRecommendationFeedbackQuery = validate((req) => {
   requireObjectId(req.query.profileId, "profileId");
+});
+
+export const validatePlaybackSessionBody = validate((req) => {
+  requireRecord(req.body);
+  requireObjectId(req.body.profileId, "profileId");
+  requireObjectId(req.body.movieId, "movieId");
+});
+
+export const validatePlaybackSessionId = validate((req) => {
+  if (typeof req.params.sessionId !== "string"
+    || !/^[A-Za-z0-9_-]{40,60}$/.test(req.params.sessionId)) {
+    fail("sessionId is invalid", "INVALID_ID");
+  }
 });

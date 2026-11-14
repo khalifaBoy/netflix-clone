@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
-    "test": "node test/admin.middleware.test.js && node test/reliability.test.js && node test/error.integration.test.js && node test/database.foundation.test.js && node test/recommendation.engine.test.js && node test/groq-reranker.test.js && node test/movie-duration.test.js && node test/recommendation-test-db-config.test.js",
-    "test:integration": "node test/recommendation.integration.test.js && node test/watch-history.api.test.js && node test/recommendation-feedback.api.test.js",
+    "test": "node test/admin.middleware.test.js && node test/reliability.test.js && node test/cors-logging.test.js && node test/error.integration.test.js && node test/database.foundation.test.js && node test/recommendation.engine.test.js && node test/groq-reranker.test.js && node test/movie-duration.test.js && node test/recommendation-test-db-config.test.js",
+    "test:integration": "node test/run-integration.js",
+    "test:playback": "node test/run-integration.js playback-session.api.test.js",
     "test:all": "npm test && npm run test:integration"
   },
   "keywords": [],

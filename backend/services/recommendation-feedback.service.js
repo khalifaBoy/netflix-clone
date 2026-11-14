@@ -1,12 +1,10 @@
 import ApiError from "../utils/ApiError.js";
 import Movie from "../models/Movie.js";
 import RecommendationFeedback from "../models/RecommendationFeedback.js";
-import { getProfileMaturityPolicy, isMovieAllowedByMaturity } from "./maturity-policy.service.js";
+import { isMovieAllowedByMaturity, requireProfileMaturityPolicy } from "./maturity-policy.service.js";
 
 const getOwnedActiveProfilePolicy = async (profileId, userId) => {
-  const policy = await getProfileMaturityPolicy(profileId, userId);
-  if (!policy) throw new ApiError(404, "PROFILE_NOT_FOUND", "Profile not found");
-  return policy;
+  return requireProfileMaturityPolicy(profileId, userId);
 };
 
 const getEligibleMovie = async (movieId, policy) => {

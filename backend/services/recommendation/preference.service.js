@@ -1,8 +1,7 @@
-import ApiError from "../../utils/ApiError.js";
 import RecommendationFeedback from "../../models/RecommendationFeedback.js";
 import WatchHistory from "../../models/WatchHistory.js";
 import Watchlist from "../../models/Watchlist.js";
-import { getProfileMaturityPolicy } from "../maturity-policy.service.js";
+import { requireProfileMaturityPolicy } from "../maturity-policy.service.js";
 
 export const PREFERENCE_CONFIG = Object.freeze({
   halfLifeDays: 90,
@@ -101,8 +100,7 @@ const populatedFeedbackQuery = (profileId) => RecommendationFeedback.find({
   .lean();
 
 export const extractProfilePreferences = async ({ profileId, userId, now = Date.now() }) => {
-  const maturityPolicy = await getProfileMaturityPolicy(profileId, userId);
-  if (!maturityPolicy) throw new ApiError(404, "PROFILE_NOT_FOUND", "Profile not found");
+  const maturityPolicy = await requireProfileMaturityPolicy(profileId, userId);
 
   const [history, watchlist, feedback] = await Promise.all([
     populatedHistoryQuery(profileId),

@@ -7,6 +7,7 @@ import type {
   MovieMutationResponse,
   MovieResponse,
   MoviesResponse,
+  PlaybackSessionResponse,
   Profile,
   ProfileInput,
   ProfileMutationResponse,
@@ -50,15 +51,19 @@ export const api = {
   },
 
   movies: {
-    list: (params: MovieListParams = {}) =>
-      axiosInstance.get<MoviesResponse>("/movies", { params }),
-    get: (movieId: string) => axiosInstance.get<MovieResponse>(`/movies/${movieId}`),
+    list: (profileId: string, params: MovieListParams = {}) =>
+      axiosInstance.get<MoviesResponse>("/movies", { params: { ...params, profileId }, ...profileConfig(profileId) }),
+    get: (movieId: string, profileId: string) =>
+      axiosInstance.get<MovieResponse>(`/movies/${movieId}`, { params: { profileId }, ...profileConfig(profileId) }),
     create: (data: FormData) => axiosInstance.post<MovieMutationResponse>("/movies", data),
     update: (movieId: string, data: FormData) =>
       axiosInstance.patch<MovieMutationResponse>(`/movies/${movieId}`, data),
     remove: (movieId: string) => axiosInstance.delete<{ success: true; message: string }>(`/movies/${movieId}`),
-    incrementViews: (movieId: string) =>
-      axiosInstance.post<{ success: true; views: number }>(`/movies/${movieId}/views`),
+    incrementViews: (movieId: string, profileId: string) =>
+      axiosInstance.post<{ success: true; views: number }>(`/movies/${movieId}/views`, null, {
+        params: { profileId },
+        ...profileConfig(profileId),
+      }),
   },
 
   recommendations: {
@@ -81,6 +86,15 @@ export const api = {
       axiosInstance.delete<void>(`/recommendations/${movieId}/feedback`, {
         params: { profileId },
         ...profileConfig(profileId),
+      }),
+  },
+
+  playback: {
+    createSession: (profileId: string, movieId: string) =>
+      axiosInstance.post<PlaybackSessionResponse>("/playback/sessions", { profileId, movieId }, profileConfig(profileId)),
+    revokeSession: (sessionId: string, token?: string) =>
+      axiosInstance.delete<{ success: true; message: string }>(`/playback/sessions/${encodeURIComponent(sessionId)}`, {
+        ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
       }),
   },
 

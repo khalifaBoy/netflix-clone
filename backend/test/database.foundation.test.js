@@ -154,7 +154,90 @@ test("kids and non-kids maturity limits reject unknown movie ratings", async () 
 
     storedProfile = { _id: profileA, isKids: false, maturityLevel: "All" };
     const unrestricted = await getProfileMaturityPolicy(profileA, profileA);
-    assert.equal(isMovieAllowedByMaturity(unrestricted, "TV-MA"), true);
+    assert.equal(isMovieAllowedByMaturity(unrestricted, "18+"), true);
+    for (const unknown of ["TV-14", "TV-MA", "PG-13", "R", ""]) {
+      assert.equal(isMovieAllowedByMaturity(unrestricted, unknown), false, `${unknown} is not a canonical maturity level`);
+    }
+  } finally {
+    Profile.findOne = original;
+  }
+});
+
+test("canonical maturity levels form ordered caps and Kids cannot exceed 7+", async () => {
+  const original = Profile.findOne;
+  let storedProfile;
+  Profile.findOne = () => ({ lean: async () => storedProfile });
+  try {
+    const levels = ["All", "7+", "13+", "16+", "18+"];
+    const age = { All: 0, "7+": 7, "13+": 13, "16+": 16, "18+": 18 };
+    for (const profileLevel of levels) {
+      storedProfile = { _id: profileA, isKids: false, maturityLevel: profileLevel };
+      const policy = await getProfileMaturityPolicy(profileA, profileA);
+      for (const movieLevel of levels) {
+        assert.equal(isMovieAllowedByMaturity(policy, movieLevel), profileLevel === "All" || age[movieLevel] <= age[profileLevel], `${profileLevel} -> ${movieLevel}`);
+      }
+    }
+    storedProfile = { _id: profileA, isKids: true, maturityLevel: "18+" };
+    const kids = await getProfileMaturityPolicy(profileA, profileA);
+    assert.equal(kids.maxAge, 7);
+    assert.equal(isMovieAllowedByMaturity(kids, "7+"), true);
+    assert.equal(isMovieAllowedByMaturity(kids, "13+"), false);
+
+    storedProfile = { _id: profileA, isKids: false };
+    const invalidSetting = await getProfileMaturityPolicy(profileA, profileA);
+    assert.equal(isMovieAllowedByMaturity(invalidSetting, "All"), false);
+  } finally {
+    Profile.findOne = original;
+  }
+});
+
+test("prototype property names and other unknown maturity labels fail closed", async () => {
+  const original = Profile.findOne;
+  let storedProfile;
+  Profile.findOne = () => ({ lean: async () => storedProfile });
+  const canonical = ["All", "7+", "13+", "16+", "18+"];
+  const unknown = [
+    "toString",
+    "constructor",
+    "__proto__",
+    "hasOwnProperty",
+    "valueOf",
+    "ordinary-unknown",
+  ];
+
+  try {
+    for (const maturityLevel of canonical) {
+      for (const isKids of [false, true]) {
+        storedProfile = { _id: profileA, isKids, maturityLevel };
+        const policy = await getProfileMaturityPolicy(profileA, profileA);
+        for (const unknownRating of unknown) {
+          assert.equal(
+            isMovieAllowedByMaturity(policy, unknownRating),
+            false,
+            `${maturityLevel} (${isKids ? "Kids" : "non-Kids"}) must reject ${unknownRating}`,
+          );
+        }
+      }
+    }
+
+    for (const maturityLevel of canonical) {
+      storedProfile = { _id: profileA, isKids: false, maturityLevel };
+      const allProfilePolicy = await getProfileMaturityPolicy(profileA, profileA);
+      if (maturityLevel === "All") {
+        for (const recognizedRating of canonical) {
+          assert.equal(isMovieAllowedByMaturity(allProfilePolicy, recognizedRating), true);
+        }
+      }
+    }
+
+    for (const maturityLevel of unknown) {
+      storedProfile = { _id: profileA, isKids: false, maturityLevel };
+      const invalidPolicy = await getProfileMaturityPolicy(profileA, profileA);
+      assert.equal(invalidPolicy.maxAge, -1, `${maturityLevel} is an invalid profile maturity setting`);
+      for (const recognizedRating of canonical) {
+        assert.equal(isMovieAllowedByMaturity(invalidPolicy, recognizedRating), false);
+      }
+    }
   } finally {
     Profile.findOne = original;
   }

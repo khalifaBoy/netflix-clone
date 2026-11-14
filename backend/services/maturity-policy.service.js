@@ -1,4 +1,5 @@
 import Profile from "../models/Profile.js";
+import ApiError from "../utils/ApiError.js";
 
 // These are the exact maturity labels already used by Profile and the movie
 // upload form. No equivalences are inferred for legacy content labels such as
@@ -18,13 +19,24 @@ const PROFILE_MATURITY_LIMIT = Object.freeze({
   "18+": 18,
 });
 
+const hasOwnCanonicalValue = (values, value) =>
+  typeof value === "string" && Object.prototype.hasOwnProperty.call(values, value);
+
 const createPolicyFromStoredProfile = (profile) => {
   if (!profile || typeof profile.isKids !== "boolean") return null;
 
-  const profileLimit = PROFILE_MATURITY_LIMIT[profile.maturityLevel];
+  const profileLimit = hasOwnCanonicalValue(PROFILE_MATURITY_LIMIT, profile.maturityLevel)
+    ? PROFILE_MATURITY_LIMIT[profile.maturityLevel]
+    : undefined;
   // Invalid legacy profile settings fail closed instead of becoming unrestricted.
   if (profileLimit === undefined) {
-    return Object.freeze({ profileId: String(profile._id), maxAge: -1, isKids: profile.isKids });
+    return Object.freeze({
+      profileId: String(profile._id),
+      maxAge: -1,
+      isKids: profile.isKids,
+      language: profile.language,
+      profileName: profile.name,
+    });
   }
 
   return Object.freeze({
@@ -49,14 +61,23 @@ export const getProfileMaturityPolicy = async (profileId, userId) => {
   return createPolicyFromStoredProfile(profile);
 };
 
+/** Load an active profile's policy and reject missing or foreign profiles consistently. */
+export const requireProfileMaturityPolicy = async (profileId, userId) => {
+  if (!profileId) throw new ApiError(400, "PROFILE_REQUIRED", "profileId is required");
+  if (!userId) throw new ApiError(401, "UNAUTHORIZED", "Authentication is required");
+  const policy = await getProfileMaturityPolicy(profileId, userId);
+  if (!policy) throw new ApiError(404, "PROFILE_NOT_FOUND", "Profile not found");
+  return policy;
+};
+
 /** Use only with a policy returned by getProfileMaturityPolicy. */
 export const isMovieAllowedByMaturity = (policy, maturityRating) => {
-  if (!policy) return false;
-  if (policy.maxAge === Infinity) return true;
-
+  if (!policy || !hasOwnCanonicalValue(MOVIE_MATURITY_AGE, maturityRating)) return false;
   const movieAge = MOVIE_MATURITY_AGE[maturityRating];
   // Restricted profiles never receive titles with missing or unsupported ratings.
-  return movieAge !== undefined && policy.maxAge >= 0 && movieAge <= policy.maxAge;
+  if (movieAge === undefined || policy.maxAge < 0) return false;
+  if (policy.maxAge === Infinity) return true;
+  return movieAge <= policy.maxAge;
 };
 
 export const filterMoviesByMaturity = (policy, movies) =>
@@ -64,7 +85,6 @@ export const filterMoviesByMaturity = (policy, movies) =>
 
 export const getAllowedMovieMaturityRatings = (policy) => {
   if (!policy || policy.maxAge < 0) return [];
-  if (policy.maxAge === Infinity) return null;
 
   return Object.entries(MOVIE_MATURITY_AGE)
     .filter(([, age]) => age <= policy.maxAge)

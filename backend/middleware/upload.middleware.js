@@ -6,6 +6,7 @@ import ApiError from "../utils/ApiError.js";
 
 const middlewareDirectory = path.dirname(fileURLToPath(import.meta.url));
 const uploadDirectory = path.resolve(middlewareDirectory, "../uploads/videos");
+export const MAX_VIDEO_UPLOAD_BYTES = 100 * 1024 * 1024;
 if (!fs.existsSync(uploadDirectory)) {
   fs.mkdirSync(uploadDirectory, { recursive: true });
 }
@@ -24,8 +25,11 @@ const fileFilter = (req, file, cb) => {
   const allowedMimeTypes = [
     "video/mp4",
     "video/mkv",
+    "video/x-matroska",
     "video/avi",
+    "video/x-msvideo",
     "video/mov",
+    "video/quicktime",
     "video/mpeg",
   ];
   if (allowedMimeTypes.includes(file.mimetype)) {
@@ -39,7 +43,7 @@ const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 100 * 1024 * 1024, // Limit file size to 100MB
+    fileSize: MAX_VIDEO_UPLOAD_BYTES,
     files: 1,
     fields: 24,
     parts: 25,

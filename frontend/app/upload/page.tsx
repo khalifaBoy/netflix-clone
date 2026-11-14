@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Film,
@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 
 import axiosInstance from "@/lib/axios";
-import { getMediaUrl } from "@/lib/api";
+import { api, getMediaUrl, isRequestCancelled } from "@/lib/api";
 
 import { allMovies, type Movie } from "@/lib/movie";
 import { cn } from "@/lib/utils";
@@ -45,7 +45,7 @@ type BackendMovie = {
 
   isTop10?: boolean;
 
-  videoUrl: string;
+  videoUrl?: string;
 
   trailerUrl?: string;
   director?: string;
@@ -84,6 +84,13 @@ const emptyForm = {
   maturityRating: "13+",
 };
 
+const canonicalMaturityRatings = ["All", "7+", "13+", "16+", "18+"] as const;
+
+const getMaturityRating = (value: string | undefined): string =>
+  canonicalMaturityRatings.includes(value as (typeof canonicalMaturityRatings)[number])
+    ? (value as (typeof canonicalMaturityRatings)[number])
+    : emptyForm.maturityRating;
+
 /*
 |--------------------------------------------------------------------------
 | Page
@@ -93,13 +100,15 @@ const emptyForm = {
 const UploadPage = () => {
   const router = useRouter();
 
-  const { user, loading: authLoading } = useAuth();
+  const { user, selectedProfile, loading: authLoading } = useAuth();
+  const profileId = selectedProfile?._id || null;
 
   const [selectedStaticMovie, setSelectedStaticMovie] = useState<Movie | null>(
     null,
   );
 
   const [movies, setMovies] = useState<BackendMovie[]>([]);
+  const [moviesProfileId, setMoviesProfileId] = useState<string | null>(null);
 
   const [searchStaticMovie, setSearchStaticMovie] = useState("");
 
@@ -118,6 +127,33 @@ const UploadPage = () => {
   const [videoPreview, setVideoPreview] = useState("");
 
   const [form, setForm] = useState(emptyForm);
+  const movieRequestGeneration = useRef(0);
+  const activeProfileIdRef = useRef<string | null>(profileId);
+  activeProfileIdRef.current = profileId;
+
+  const fetchMovies = useCallback(async (requestProfileId: string) => {
+    if (!requestProfileId || activeProfileIdRef.current !== requestProfileId) return;
+    const generation = ++movieRequestGeneration.current;
+    setLoadingMovies(true);
+    setError("");
+    try {
+      const response = await api.movies.list(requestProfileId);
+      if (generation !== movieRequestGeneration.current || activeProfileIdRef.current !== requestProfileId) return;
+      const fetchedMovies = response.data?.movies || [];
+      setMovies(fetchedMovies);
+      setMoviesProfileId(requestProfileId);
+    } catch (requestError: any) {
+      if (generation !== movieRequestGeneration.current || activeProfileIdRef.current !== requestProfileId || isRequestCancelled(requestError)) return;
+      console.error("Fetch movies error:", requestError);
+      setMovies([]);
+      setMoviesProfileId(requestProfileId);
+      setError(requestError?.message || "Failed to load movies.");
+    } finally {
+      if (generation === movieRequestGeneration.current && activeProfileIdRef.current === requestProfileId) {
+        setLoadingMovies(false);
+      }
+    }
+  }, []);
 
   const filteredStaticMovies = useMemo(() => {
     const query = searchStaticMovie.trim().toLowerCase();
@@ -149,30 +185,23 @@ const UploadPage = () => {
     }
   }, [user, authLoading, router]);
 
-  const fetchMovies = async () => {
-    try {
-      setLoadingMovies(true);
-      setError("");
-
-      const response = await axiosInstance.get("/movies");
-
-      const fetchedMovies = response.data?.movies || response.data?.data || [];
-
-      setMovies(fetchedMovies);
-    } catch (error: any) {
-      console.error("Fetch movies error:", error);
-
-      setError(error?.response?.data?.message || "Failed to load movies.");
-    } finally {
-      setLoadingMovies(false);
-    }
-  };
-
   useEffect(() => {
-    if (!authLoading && user?.role === "admin") {
-      fetchMovies();
+    movieRequestGeneration.current += 1;
+    setMovies([]);
+    setMoviesProfileId(null);
+    setError("");
+    if (authLoading || user?.role !== "admin" || !profileId) {
+      setLoadingMovies(false);
+      return;
     }
-  }, [authLoading, user]);
+    void fetchMovies(profileId);
+    return () => {
+      movieRequestGeneration.current += 1;
+    };
+  }, [authLoading, user?.role, profileId, fetchMovies]);
+
+  const visibleMovies = moviesProfileId === profileId ? movies : [];
+  const showMoviesLoading = loadingMovies || Boolean(profileId && moviesProfileId !== profileId);
 
   const handleSelectStaticMovie = (movie: Movie | null) => {
     setSelectedStaticMovie(movie);
@@ -224,7 +253,9 @@ const UploadPage = () => {
 
       language: "English",
 
-      maturityRating: movie.rating || "13+",
+      // Catalog `rating` values are presentation labels (for example TV-MA or
+      // PG-13), not the backend's canonical maturity policy values.
+      maturityRating: getMaturityRating(movie.maturityRating),
     });
   };
 
@@ -382,21 +413,9 @@ const UploadPage = () => {
     try {
       setUploading(true);
 
-      const response = await axiosInstance.post("/movies", formData);
+      await axiosInstance.post("/movies", formData);
 
-      const createdMovie = response.data?.movie || response.data?.data;
-
-      /*
-      |--------------------------------------------------------------------------
-      | Add newly uploaded movie
-      |--------------------------------------------------------------------------
-      */
-
-      if (createdMovie) {
-        setMovies((previous) => [createdMovie, ...previous]);
-      } else {
-        await fetchMovies();
-      }
+      await fetchMovies(activeProfileIdRef.current || "");
 
       setSuccess(`${form.title} uploaded successfully.`);
 
@@ -1170,15 +1189,15 @@ const UploadPage = () => {
             </div>
 
             <span className="text-sm text-white/40">
-              {movies.length} movies
+              {visibleMovies.length} movies
             </span>
           </div>
 
-          {loadingMovies ? (
+          {showMoviesLoading ? (
             <div className="py-20 flex justify-center">
               <Loader2 className="w-8 h-8 text-white/40 animate-spin" />
             </div>
-          ) : movies.length === 0 ? (
+          ) : visibleMovies.length === 0 ? (
             <div className="py-20 rounded-xl border border-white/10 text-center">
               <Film className="w-12 h-12 mx-auto text-white/20 mb-4" />
 
@@ -1186,7 +1205,7 @@ const UploadPage = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-              {movies.map((movie) => (
+              {visibleMovies.map((movie) => (
                 <div
                   key={movie._id}
                   className="bg-[#1f1f1f] border border-white/10 rounded-xl overflow-hidden"

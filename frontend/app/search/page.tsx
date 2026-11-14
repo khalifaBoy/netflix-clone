@@ -4,41 +4,16 @@ import Footer from "@/components/Footer";
 import MovieDetailModal from "@/components/MovieDetailModal";
 import Navbar from "@/components/Navbar";
 
-import { allMovies, Movie } from "@/lib/movie";
-import axiosInstance from "@/lib/axios";
-import { api, isRequestCancelled } from "@/lib/api";
+import { Movie } from "@/lib/movie";
+import { api } from "@/lib/api";
+import { ProfileMovieFeedCoordinator } from "@/lib/profile-movie-feed.mjs";
+import { normalizeRecommendationMovie } from "@/lib/recommendation-feed.mjs";
+import { getMovieWatchPath } from "@/lib/movie-navigation.mjs";
 
 import { SearchIcon, Loader2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import React, { Suspense, useEffect, useMemo, useState } from "react";
+import React, { Suspense, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/context/Authcontext";
-
-type ApiMovie = {
-  _id?: string;
-  id?: string;
-
-  title: string;
-  description: string;
-  longDescription?: string;
-
-  backdrop?: string;
-  poster?: string;
-
-  year: number;
-  rating: string;
-  duration: string;
-
-  genres: string[];
-  cast: string[];
-
-  match?: number;
-
-  isNew?: boolean;
-  isNewRelease?: boolean;
-  isTop10?: boolean;
-
-  videoUrl?: string;
-};
 
 const page = () => {
   return (
@@ -51,7 +26,7 @@ const page = () => {
 function SearchPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { selectedProfile } = useAuth();
+  const { selectedProfile, user } = useAuth();
   const [query, setQuery] = useState(searchParams.get("q") || "");
 
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
@@ -59,12 +34,17 @@ function SearchPage() {
   const [modalOpen, setModalOpen] = useState(false);
 
   // API results
-  const [searchResults, setSearchResults] = useState<Movie[]>([]);
-  const [searchResultsProfileId, setSearchResultsProfileId] = useState<string | null>(null);
-
-  const [loading, setLoading] = useState(false);
-
-  const [searchError, setSearchError] = useState("");
+  const profileId = user ? selectedProfile?._id || null : null;
+  const [feedState, setFeedState] = useState({ profileId: null as string | null, requestKey: "", status: "idle" as string, movies: [] as Movie[], error: null as unknown });
+  const coordinator = useRef<ProfileMovieFeedCoordinator | null>(null);
+  if (!coordinator.current) coordinator.current = new ProfileMovieFeedCoordinator(
+    (id: string, q: string) => api.recommendations.search(q, id),
+    normalizeRecommendationMovie,
+  );
+  const loading = Boolean(query.trim() && profileId && (feedState.profileId !== profileId || feedState.requestKey !== query.trim() || feedState.status === "loading"));
+  const searchError = feedState.status === "error" && feedState.profileId === profileId && feedState.requestKey === query.trim()
+    ? (feedState.error as Error)?.message || "Failed to search movies."
+    : "";
 
   useEffect(() => {
     const q = searchParams.get("q") || "";
@@ -72,102 +52,30 @@ function SearchPage() {
     setQuery(q);
   }, [searchParams]);
 
-  const formatMovie = (movie: ApiMovie): Movie => {
-    return {
-      id: movie._id || movie.id || "",
-
-      title: movie.title,
-
-      description: movie.description,
-
-      longDescription: movie.longDescription || movie.description,
-
-      backdrop: movie.backdrop || "",
-
-      poster: movie.poster || "",
-
-      year: movie.year,
-
-      rating: movie.rating,
-
-      duration: movie.duration,
-
-      genres: movie.genres || [],
-
-      cast: movie.cast || [],
-
-      match: movie.match || 0,
-
-      isNew: movie.isNew ?? movie.isNewRelease ?? false,
-
-      isTop10: movie.isTop10 ?? false,
-
-      videoUrl: movie.videoUrl || "",
-    };
-  };
-
+  useEffect(() => coordinator.current?.setListener(setFeedState), []);
   useEffect(() => {
-    let current = true;
-    setSearchResults([]);
-    setSearchResultsProfileId(null);
-    setSearchError("");
-    setLoading(false);
-    const searchMovies = async () => {
-      const searchQuery = query.trim();
-      if (!searchQuery || !selectedProfile) {
-        return;
-      }
-      try {
-        setLoading(true);
-        setSearchError("");
-        const response = await api.recommendations.search(searchQuery, selectedProfile._id);
-        const movies = response.data.movies || [];
-        const formattedMovies = movies.map((movie: ApiMovie) =>
-          formatMovie(movie),
-        );
-        if (current) {
-          setSearchResults(formattedMovies);
-          setSearchResultsProfileId(selectedProfile._id);
-        }
-      } catch (error: any) {
-        if (!current || isRequestCancelled(error)) return;
-        console.error("Search recommendation error:", error);
-        setSearchResults([]);
-        setSearchError(error?.message || "Failed to search movies.");
-      } finally {
-        if (current) setLoading(false);
-      }
-    };
+    setSelectedMovie(null);
+    setModalOpen(false);
+  }, [profileId]);
+  useEffect(() => {
+    const searchQuery = query.trim();
+    if (!searchQuery || !profileId || !selectedProfile) {
+      coordinator.current?.clear();
+      return;
+    }
     const timer = setTimeout(() => {
-      searchMovies();
+      void coordinator.current?.load(selectedProfile, searchQuery);
     }, 400);
+    return () => clearTimeout(timer);
+  }, [query, profileId, selectedProfile?.isKids, selectedProfile?.maturityLevel]);
 
-    return () => {
-      current = false;
-      clearTimeout(timer);
-    };
-  }, [query, selectedProfile]);
-
-  const staticResults = useMemo(() => {
-    if (!query.trim()) return [];
-
-    const lower = query.toLowerCase();
-
-    return allMovies.filter(
-      (movie) =>
-        movie.title.toLowerCase().includes(lower) ||
-        movie.description.toLowerCase().includes(lower) ||
-        movie.genres.some((genre) => genre.toLowerCase().includes(lower)) ||
-        movie.cast.some((cast) => cast.toLowerCase().includes(lower)),
-    );
-  }, [query]);
-
-  const currentProfileResults = selectedProfile?._id === searchResultsProfileId
-    ? searchResults
+  const currentProfileResults = feedState.profileId === profileId && feedState.requestKey === query.trim()
+    ? feedState.movies
     : [];
-  const results = currentProfileResults.length > 0 ? currentProfileResults : staticResults;
+  const results = currentProfileResults.filter((movie) => Boolean(getMovieWatchPath(movie.id)));
 
   const handleSelectMovie = (movie: Movie) => {
+    if (!profileId || !getMovieWatchPath(movie.id)) return;
     setSelectedMovie(movie);
     setModalOpen(true);
   };
@@ -278,9 +186,7 @@ function SearchPage() {
 
                   <div className="p-2 md:p-3">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-green-500 text-xs font-bold">
-                        {movie.match}% Match
-                      </span>
+                      {movie.match !== undefined && <span className="text-green-500 text-xs font-bold">{movie.match}% Match</span>}
 
                       <span className="text-white/40 text-xs">
                         {movie.year}
@@ -312,6 +218,7 @@ function SearchPage() {
         movie={selectedMovie}
         open={modalOpen}
         onOpenChange={setModalOpen}
+        onSelectMovie={handleSelectMovie}
       />
     </div>
   );

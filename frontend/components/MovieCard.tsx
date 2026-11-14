@@ -2,18 +2,30 @@
 
 import { Movie } from "@/lib/movie";
 import { useWatchlist } from "@/context/WatchlistContext";
+import { useRecommendationFeedback } from "@/context/RecommendationFeedbackContext";
+import type { RecommendationFeedbackType } from "@/lib/types";
 import { Check, ChevronDown, LoaderCircle, Play, Plus, ThumbsUp } from "lucide-react";
+import { getMovieWatchPath } from "@/lib/movie-navigation.mjs";
 
 type MovieCardProps = {
   movie: Movie;
   onSelect: (movie: Movie) => void;
+  onPlay?: (movie: Movie) => void;
   rank?: number;
 };
-const MovieCard = ({ movie, onSelect, rank }: MovieCardProps) => {
+const MovieCard = ({ movie, onSelect, onPlay, rank }: MovieCardProps) => {
   const { isInWatchlist, isPending, toggleMovie, operationErrors } = useWatchlist();
+  const feedback = useRecommendationFeedback();
+  const selectedFeedback = feedback.selected(movie.id);
+  const feedbackButtons: { type: RecommendationFeedbackType; label: string; short: string }[] = [
+    { type: "MORE_LIKE_THIS", label: "More Like This", short: "More" },
+    { type: "NOT_INTERESTED", label: "Not Interested", short: "Not for me" },
+    { type: "ALREADY_WATCHED", label: "Already Watched", short: "Watched" },
+  ];
   const inWatchlist = isInWatchlist(movie.id);
   const pending = isPending(movie.id);
   const watchlistError = operationErrors[movie.id];
+  const canPlay = Boolean(getMovieWatchPath(movie.id));
 
   if (rank) {
     return (
@@ -54,6 +66,14 @@ const MovieCard = ({ movie, onSelect, rank }: MovieCardProps) => {
                 {pending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : inWatchlist ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
               </button>
             </div>
+            <div className="mt-1 flex gap-1">
+              {feedbackButtons.map(({ type, label, short }) => (
+                <button key={type} type="button" disabled={feedback.isPending(movie.id)} aria-label={label} aria-pressed={selectedFeedback === type} title={feedback.errors[movie.id] || label} onClick={(event) => { event.stopPropagation(); void feedback.submit(movie.id, type); }} className={`rounded px-1 py-0.5 text-[9px] text-white disabled:opacity-50 ${selectedFeedback === type ? "bg-red-700" : "bg-black/60 hover:bg-black"}`}>{short}</button>
+              ))}
+              {selectedFeedback && <button type="button" disabled={feedback.isPending(movie.id)} onClick={(event) => { event.stopPropagation(); void feedback.remove(movie.id); }} className="rounded px-1 py-0.5 text-[9px] text-white/70">Undo</button>}
+            </div>
+            {feedback.isPending(movie.id) && <p role="status" className="mt-1 flex items-center gap-1 text-[10px] text-white/70"><LoaderCircle className="h-3 w-3 animate-spin" />Saving feedback…</p>}
+            {feedback.errors[movie.id] && <p role="alert" className="mt-1 text-xs text-red-300">{feedback.errors[movie.id]}</p>}
             {watchlistError && <p role="alert" className="mt-1 text-xs text-red-300">{watchlistError}</p>}
           </div>
         </div>
@@ -74,7 +94,17 @@ const MovieCard = ({ movie, onSelect, rank }: MovieCardProps) => {
 
       <div className="absolute bottom-0 left-0 right-0 p-3 opacity-0 group-hover/card:opacity-100 transition-opacity duration-300">
         <div className="flex items-center gap-2 mb-2">
-          <button className="w-8 h-8 bg-white rounded-full flex items-center justify-center hover:bg-white/80 transition-colors">
+          <button
+            type="button"
+            disabled={!canPlay}
+            aria-label={`Play ${movie.title}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (onPlay) onPlay(movie);
+              else onSelect(movie);
+            }}
+            className="w-8 h-8 bg-white rounded-full flex items-center justify-center hover:bg-white/80 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+          >
             <Play className="w-4 h-4 fill-black text-black" />
           </button>
           <button
@@ -91,7 +121,7 @@ const MovieCard = ({ movie, onSelect, rank }: MovieCardProps) => {
           >
             {pending ? <LoaderCircle className="w-4 h-4 animate-spin" /> : inWatchlist ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
           </button>
-          <button className="w-8 h-8 border-2 border-white/60 rounded-full flex items-center justify-center text-white hover:border-white transition-colors">
+          <button type="button" disabled={feedback.isPending(movie.id)} aria-label="More Like This" aria-pressed={selectedFeedback === "MORE_LIKE_THIS"} title={feedback.errors[movie.id] || "More Like This"} onClick={(event) => { event.stopPropagation(); void feedback.submit(movie.id, "MORE_LIKE_THIS"); }} className={`w-8 h-8 border-2 rounded-full flex items-center justify-center text-white hover:border-white transition-colors disabled:opacity-50 ${selectedFeedback === "MORE_LIKE_THIS" ? "border-green-400 bg-green-900/60" : "border-white/60"}`}>
             <ThumbsUp className="w-3.5 h-3.5" />
           </button>
           <button
@@ -104,11 +134,19 @@ const MovieCard = ({ movie, onSelect, rank }: MovieCardProps) => {
             <ChevronDown className="w-4 h-4" />
           </button>
         </div>
+        <div className="flex gap-1 mb-1">
+          {feedbackButtons.slice(1).map(({ type, label, short }) => (
+            <button key={type} type="button" disabled={feedback.isPending(movie.id)} aria-pressed={selectedFeedback === type} title={feedback.errors[movie.id] || label} onClick={(event) => { event.stopPropagation(); void feedback.submit(movie.id, type); }} className={`rounded px-1.5 py-1 text-[10px] text-white disabled:opacity-50 ${selectedFeedback === type ? "bg-red-700" : "bg-white/15 hover:bg-white/25"}`}>{short}</button>
+          ))}
+          {selectedFeedback && <button type="button" disabled={feedback.isPending(movie.id)} onClick={(event) => { event.stopPropagation(); void feedback.remove(movie.id); }} className="rounded px-1.5 py-1 text-[10px] text-white/70 hover:text-white disabled:opacity-50">Undo</button>}
+        </div>
+        {feedback.isPending(movie.id) && <p role="status" className="mb-1 flex items-center gap-1 text-[10px] text-white/70"><LoaderCircle className="h-3 w-3 animate-spin" />Saving feedback…</p>}
+        {feedback.errors[movie.id] && <p role="alert" className="mb-1 text-xs text-red-300">{feedback.errors[movie.id]}</p>}
         <p className="text-white text-sm font-bold truncate mb-1">
           {movie.title}
         </p>
         <div className="flex items-center gap-2 text-xs">
-          <span className="text-green-500 font-bold">{movie.match}% Match</span>
+          {movie.match !== undefined && <span className="text-green-500 font-bold">{movie.match}% Match</span>}
           <span className="border border-white/40 text-white/70 px-1 text-[10px]">
             {movie.rating}
           </span>

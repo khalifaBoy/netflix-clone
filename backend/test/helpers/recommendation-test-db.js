@@ -7,6 +7,7 @@ import WatchHistory from "../../models/WatchHistory.js";
 import RecommendationFeedback from "../../models/RecommendationFeedback.js";
 import RecommendationInteraction from "../../models/RecommendationInteraction.js";
 import Watchlist from "../../models/Watchlist.js";
+import PlaybackSession from "../../models/PlaybackSession.js";
 
 export const recommendationModels = [
   User,
@@ -16,7 +17,11 @@ export const recommendationModels = [
   RecommendationFeedback,
   RecommendationInteraction,
   Watchlist,
+  PlaybackSession,
 ];
+
+let testConnectionPromise = null;
+let testConnectionUri = null;
 
 const parseTarget = (value, variableName, { requireExplicitDatabase = false } = {}) => {
   let parsed;
@@ -72,29 +77,62 @@ export const validateTestDatabaseUri = (env = process.env) => {
     throw new Error("MONGO_TEST_URI database name matches the effective production database; refusing to run integration tests");
   }
 
+  const testUrl = new URL(uri);
+  const localHost = testUrl.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (testUrl.protocol !== "mongodb:" || !["localhost", "127.0.0.1", "::1"].includes(localHost)) {
+    throw new Error("MONGO_TEST_URI must use the dedicated local MongoDB test service; remote databases are not allowed");
+  }
+
   return { uri, target: testTarget };
+};
+
+const initializeTestDatabaseConnection = async ({ uri, target }) => {
+  if (mongoose.connection.readyState !== 0) {
+    throw new Error("Mongoose already has an active connection outside the isolated test database helper");
+  }
+
+  try {
+    await mongoose.connect(uri, { serverSelectionTimeoutMS: 5000, autoIndex: false });
+  } catch (error) {
+    await mongoose.disconnect().catch(() => {});
+    throw new Error(`Unable to connect to the dedicated MONGO_TEST_URI database (${error?.name || "connection error"})`);
+  }
+
+  try {
+    if (mongoose.connection.name.toLowerCase() !== target.databaseName) {
+      throw new Error("Connected database name does not match the validated MONGO_TEST_URI target");
+    }
+    if (!/(^|[-_])test($|[-_])/i.test(mongoose.connection.name)) {
+      throw new Error("Connected database is not explicitly named as a test database");
+    }
+
+    // Build only declared indexes in the explicitly validated isolated database.
+    await Promise.all(recommendationModels.map((model) => model.createIndexes()));
+    return mongoose.connection;
+  } catch (error) {
+    await mongoose.disconnect().catch(() => {});
+    throw error;
+  }
 };
 
 export const connectRecommendationTestDatabase = async () => {
   const { uri, target } = validateTestDatabaseUri();
+  if (testConnectionPromise) {
+    if (testConnectionUri !== uri) {
+      throw new Error("Test database connection is already initializing for a different MONGO_TEST_URI");
+    }
+    return testConnectionPromise;
+  }
+
+  testConnectionUri = uri;
+  testConnectionPromise = initializeTestDatabaseConnection({ uri, target });
   try {
-    await mongoose.connect(uri, { serverSelectionTimeoutMS: 5000, autoIndex: false });
+    return await testConnectionPromise;
   } catch (error) {
-    throw new Error(`Unable to connect to the dedicated MONGO_TEST_URI database (${error?.name || "connection error"})`);
+    testConnectionPromise = null;
+    testConnectionUri = null;
+    throw error;
   }
-
-  if (mongoose.connection.name.toLowerCase() !== target.databaseName) {
-    await mongoose.disconnect();
-    throw new Error("Connected database name does not match the validated MONGO_TEST_URI target");
-  }
-  if (!/(^|[-_])test($|[-_])/i.test(mongoose.connection.name)) {
-    await mongoose.disconnect();
-    throw new Error("Connected database is not explicitly named as a test database");
-  }
-
-  // Build only declared indexes in the explicitly validated isolated database.
-  await Promise.all(recommendationModels.map((model) => model.createIndexes()));
-  return mongoose.connection;
 };
 
 export const inspectRecommendationIndexes = async () => {
@@ -106,5 +144,11 @@ export const inspectRecommendationIndexes = async () => {
 };
 
 export const disconnectRecommendationTestDatabase = async () => {
-  if (mongoose.connection.readyState !== 0) await mongoose.disconnect();
+  try {
+    if (testConnectionPromise) await testConnectionPromise.catch(() => {});
+    if (mongoose.connection.readyState !== 0) await mongoose.disconnect();
+  } finally {
+    testConnectionPromise = null;
+    testConnectionUri = null;
+  }
 };

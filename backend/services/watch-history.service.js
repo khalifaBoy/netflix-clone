@@ -3,9 +3,9 @@ import ApiError from "../utils/ApiError.js";
 import Movie from "../models/Movie.js";
 import WatchHistory from "../models/WatchHistory.js";
 import {
-  getProfileMaturityPolicy,
   getAllowedMovieMaturityRatings,
   isMovieAllowedByMaturity,
+  requireProfileMaturityPolicy,
 } from "./maturity-policy.service.js";
 import { MAX_MOVIE_DURATION_SECONDS } from "./movie-duration.service.js";
 
@@ -21,9 +21,7 @@ const positiveLimit = (value, fallback) => {
 };
 
 export const loadAuthorizedWatchProfile = async (profileId, userId) => {
-  const policy = await getProfileMaturityPolicy(profileId, userId);
-  if (!policy) throw new ApiError(404, "PROFILE_NOT_FOUND", "Profile not found");
-  return policy;
+  return requireProfileMaturityPolicy(profileId, userId);
 };
 
 const getEligiblePublishedMovie = async (movieId, policy) => {

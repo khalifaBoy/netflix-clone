@@ -9,9 +9,10 @@ type MovieRowProps = {
   title: string;
   movies: Movie[];
   onSelectMovie: (movie: Movie) => void;
+  onPlayMovie?: (movie: Movie) => void;
   isTop10?: boolean;
 };
-const MovieRow = ({ title, movies, onSelectMovie, isTop10 }: MovieRowProps) => {
+const MovieRow = ({ title, movies, onSelectMovie, onPlayMovie, isTop10 }: MovieRowProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showLeft, setShowLeft] = useState(false);
   const [showRight, setShowRight] = useState(true);
@@ -62,6 +63,7 @@ const MovieRow = ({ title, movies, onSelectMovie, isTop10 }: MovieRowProps) => {
               key={movie.id}
               movie={movie}
               onSelect={onSelectMovie}
+              onPlay={onPlayMovie}
               rank={isTop10 ? index + 1 : undefined}
             />
           ))}

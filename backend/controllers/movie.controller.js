@@ -5,6 +5,7 @@ import {
   resolveMovieDurationSecondsOnUpdate,
 } from "../services/movie-duration.service.js";
 import fs from "fs";
+import { getAllowedMovieMaturityRatings, isMovieAllowedByMaturity } from "../services/maturity-policy.service.js";
 
 /*
 |--------------------------------------------------------------------------
@@ -134,8 +135,10 @@ export const getMovies = async (req, res, next) => {
     const pageNumber = Math.max(Number(page), 1);
     const limitNumber = Math.min(Number(limit), 100);
 
+    const allowedRatings = getAllowedMovieMaturityRatings(req.profileMaturityPolicy);
     const query = {
       isPublished: true,
+      maturityRating: { $in: allowedRatings },
     };
 
     if (search) {
@@ -199,7 +202,7 @@ export const getMovie = async (req, res, next) => {
       isPublished: true,
     });
 
-    if (!movie) {
+    if (!movie || !isMovieAllowedByMaturity(req.profileMaturityPolicy, movie.maturityRating)) {
       return res.status(404).json({
         success: false,
         message: "Movie not found",
@@ -430,11 +433,10 @@ export const incrementMovieViews = async (req, res, next) => {
   try {
     const { movieId } = req.params;
 
+    const policy = req.profileMaturityPolicy;
+    const allowedRatings = getAllowedMovieMaturityRatings(policy);
     const movie = await Movie.findOneAndUpdate(
-      {
-        _id: movieId,
-        isPublished: true,
-      },
+      { _id: movieId, isPublished: true, maturityRating: { $in: allowedRatings } },
       {
         $inc: {
           views: 1,

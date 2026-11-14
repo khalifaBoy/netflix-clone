@@ -10,10 +10,14 @@ export type Movie = {
     duration: string;
     genres: string[];
     cast: string[];
-    match: number;
+    match?: number;
     isNew?: boolean;
     isTop10?: boolean;
+    views?: number;
+    createdAt?: string;
+    releaseDate?: string | null;
     videoUrl: string;
+    maturityRating?: string;
 };
 
 export type MovieRow = {

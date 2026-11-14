@@ -1,5 +1,6 @@
 import multer from "multer";
 import ApiError from "../utils/ApiError.js";
+import { redactPlaybackSessionUrl } from "../utils/security-log.js";
 
 const normalizeError = (error) => {
   if (error instanceof ApiError) {
@@ -92,7 +93,12 @@ export const errorHandler = (error, req, res, next) => {
     if (process.env.NODE_ENV === "production") {
       console.error("Unhandled request error", { name: error?.name, code: error?.code });
     } else {
-      console.error("Unhandled request error:", error);
+      console.error("Unhandled request error", {
+        name: error?.name,
+        code: error?.code,
+        message: redactPlaybackSessionUrl(error?.message || ""),
+        stack: redactPlaybackSessionUrl(error?.stack || ""),
+      });
     }
   }
 

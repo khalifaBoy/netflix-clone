@@ -4,26 +4,14 @@ import groq from "../config/groq.js";
 import { generateDeterministicRecommendations } from "../services/recommendation/recommendation.service.js";
 
 import Movie from "../models/Movie.js";
-import Profile from "../models/Profile.js";
 import Watchlist from "../models/Watchlist.js";
+import { getAllowedMovieMaturityRatings, requireProfileMaturityPolicy } from "../services/maturity-policy.service.js";
 
 /*
 |--------------------------------------------------------------------------
 | GET PROFILE
 |--------------------------------------------------------------------------
 */
-
-const getProfile = async (profileId, userId) => {
-  if (!mongoose.Types.ObjectId.isValid(profileId)) {
-    return null;
-  }
-
-  return Profile.findOne({
-    _id: profileId,
-    user: userId,
-    isActive: true,
-  }).lean();
-};
 
 /*
 |--------------------------------------------------------------------------
@@ -134,14 +122,8 @@ export const searchRecommendations = async (req, res, next) => {
 
     const searchQuery = q.trim();
 
-    const profile = await getProfile(profileId, req.user._id);
-
-    if (!profile) {
-      return res.status(404).json({
-        success: false,
-        message: "Profile not found",
-      });
-    }
+    const maturityPolicy = await requireProfileMaturityPolicy(profileId, req.user._id);
+    const allowedRatings = getAllowedMovieMaturityRatings(maturityPolicy);
 
     const context = await getRecommendationContext(profileId);
 
@@ -164,13 +146,7 @@ export const searchRecommendations = async (req, res, next) => {
       /*
       | Kids profile restriction
       */
-      ...(profile.isKids
-        ? {
-            maturityRating: {
-              $in: ["All", "7+"],
-            },
-          }
-        : {}),
+      maturityRating: { $in: allowedRatings },
     })
       .select(
         [
@@ -245,13 +221,7 @@ export const searchRecommendations = async (req, res, next) => {
           },
         ],
 
-        ...(profile.isKids
-          ? {
-              maturityRating: {
-                $in: ["All", "7+"],
-              },
-            }
-          : {}),
+        maturityRating: { $in: allowedRatings },
       })
         .select(
           [
@@ -293,8 +263,8 @@ export const searchRecommendations = async (req, res, next) => {
         query: searchQuery,
 
         profile: {
-          id: profile._id,
-          name: profile.name,
+          id: maturityPolicy.profileId,
+          name: maturityPolicy.profileName,
         },
 
         count: 0,
@@ -457,8 +427,8 @@ ${JSON.stringify(
       query: searchQuery,
 
       profile: {
-        id: profile._id,
-        name: profile.name,
+        id: maturityPolicy.profileId,
+        name: maturityPolicy.profileName,
       },
 
       count: movies.length,

@@ -25,11 +25,13 @@ export interface Profile {
   avatar?: string;
   isKids: boolean;
   language: string;
-  maturityLevel: string;
+  maturityLevel: MaturityLevel;
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
+
+export type MaturityLevel = "All" | "7+" | "13+" | "16+" | "18+";
 
 export interface Movie {
   _id: string;
@@ -172,6 +174,17 @@ export interface FeedbackResponse extends ApiSuccess {
   feedback: RecommendationFeedback;
 }
 
+export interface PlaybackSession {
+  sessionId: string;
+  movieId: string;
+  expiresAt: string;
+  mediaUrl: string;
+}
+
+export interface PlaybackSessionResponse extends ApiSuccess {
+  session: PlaybackSession;
+}
+
 export interface MovieListParams {
   page?: number;
   limit?: number;
@@ -186,5 +199,5 @@ export interface ProfileInput {
   avatar?: string;
   isKids?: boolean;
   language?: string;
-  maturityLevel?: string;
+  maturityLevel?: MaturityLevel;
 }

@@ -11,6 +11,9 @@ import {
 } from "../middleware/validate.middleware.js";
 import ApiError from "../utils/ApiError.js";
 import movieRoutes from "../routes/movie.routes.js";
+import Movie from "../models/Movie.js";
+import { createMovie } from "../controllers/movie.controller.js";
+import { MAX_VIDEO_UPLOAD_BYTES } from "../middleware/upload.middleware.js";
 
 const response = () => ({
   statusCode: null,
@@ -94,6 +97,82 @@ test("validates optional admin durationSeconds as a positive bounded integer", a
   assert.equal(cleared.nextCalled, true);
 });
 
+test("caps uploaded movie files at 100 MiB", () => {
+  assert.equal(MAX_VIDEO_UPLOAD_BYTES, 100 * 1024 * 1024);
+});
+
+test("accepts canonical maturity labels and rejects rating labels on movie uploads", async () => {
+  const uploadBody = {
+    title: "Test Movie",
+    description: "A test movie",
+    backdrop: "https://example.test/backdrop.jpg",
+    poster: "https://example.test/poster.jpg",
+    year: "2025",
+    rating: "PG-13",
+    duration: "1h 30m",
+  };
+
+  for (const maturityRating of ["All", "7+", "13+", "16+", "18+"]) {
+    const result = await runMiddleware(validateCreateMovie, {
+      body: { ...uploadBody, maturityRating },
+      file: { path: "/tmp/test-movie-upload.mp4" },
+    });
+    assert.equal(result.nextCalled, true, maturityRating);
+  }
+
+  for (const maturityRating of ["PG-13", "R", "TV-14", "TV-MA", "unrated"]) {
+    const invalid = await runMiddleware(validateCreateMovie, {
+      body: { ...uploadBody, maturityRating },
+      file: { path: "/tmp/test-movie-upload.mp4" },
+    });
+    assert.equal(invalid.passedError.statusCode, 400, maturityRating);
+  }
+});
+
+test("defaults omitted upload maturity rating to 13+ in the movie creation controller", async () => {
+  const result = await runMiddleware(validateCreateMovie, {
+    body: {
+      title: "Test Movie",
+      description: "A test movie",
+      backdrop: "https://example.test/backdrop.jpg",
+      poster: "https://example.test/poster.jpg",
+      year: "2025",
+      rating: "PG-13",
+      duration: "1h 30m",
+    },
+    file: { path: "/tmp/test-movie-upload.mp4" },
+  });
+  assert.equal(result.nextCalled, true);
+  assert.equal(result.passedError, undefined);
+
+  const originalCreate = Movie.create;
+  let createdMovie;
+  Movie.create = async (fields) => {
+    createdMovie = fields;
+    return fields;
+  };
+  const res = response();
+  res.status = function status(code) {
+    this.statusCode = code;
+    return this;
+  };
+  try {
+    await createMovie({
+      body: {
+        title: "Test Movie",
+        description: "A test movie",
+        year: "2025",
+        rating: "PG-13",
+        duration: "1h 30m",
+      },
+      file: { filename: "video-test.mp4" },
+    }, res, (error) => { throw error; });
+  } finally {
+    Movie.create = originalCreate;
+  }
+  assert.equal(createdMovie.maturityRating, "13+");
+});
+
 test("maps parser and Multer errors and hides unexpected details", () => {
   assert.equal(normalizeError({ type: "entity.too.large" }).status, 413);
   assert.equal(normalizeError({ type: "entity.parse.failed" }).status, 400);
@@ -141,7 +220,7 @@ test("adds stable codes to existing direct controller error responses", () => {
   });
 });
 
-test("keeps movie read routes public and guards every catalog write route", () => {
+test("requires an owned profile for movie reads and guards every catalog write route", () => {
   const findRoute = (path, method) => movieRoutes.stack
     .map((layer) => layer.route)
     .find((route) => route?.path === path && route.methods[method]);
@@ -154,7 +233,9 @@ test("keeps movie read routes public and guards every catalog write route", () =
     assert.ok(names.indexOf("protect") < names.indexOf("requireAdmin"));
   }
 
-  for (const [path, method] of [["/", "get"], ["/:movieId", "get"]]) {
-    assert.ok(!middlewareNames(findRoute(path, method)).includes("protect"));
+  for (const [path, method] of [["/", "get"], ["/:movieId", "get"], ["/:movieId/views", "post"]]) {
+    const names = middlewareNames(findRoute(path, method));
+    assert.ok(names.includes("protect"), `${method.toUpperCase()} ${path} requires authentication`);
+    assert.ok(names.includes("requireProfilePolicy"), `${method.toUpperCase()} ${path} resolves an owned profile policy`);
   }
 });

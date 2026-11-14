@@ -161,12 +161,12 @@ const groqJson = (movieIds, status = 200) => new Response(
   { status, headers: { "content-type": "application/json" } },
 );
 
-test("enforces a separately named test database without requiring a separate MongoDB cluster", async () => {
+test("enforces the dedicated local test database and rejects remote test URIs", async () => {
   // This test checks only configuration parsing; it never opens a connection.
   assert.throws(() => validateTestDatabaseUri({ MONGO_URI: "mongodb://localhost/netflix" }), /MONGO_TEST_URI is required/);
   assert.equal(validateTestDatabaseUri({
     MONGO_URI: "mongodb+srv://user:pass@same-cluster.example/netflix_clone",
-    MONGO_TEST_URI: "mongodb+srv://user:pass@same-cluster.example/netflix_clone_test",
+    MONGO_TEST_URI: "mongodb://127.0.0.1:27018/netflix_clone_test",
   }).target.databaseName, "netflix_clone_test");
   assert.throws(() => validateTestDatabaseUri({
     MONGO_URI: "mongodb+srv://user:pass@same-cluster.example/netflix_clone_test",
@@ -174,7 +174,7 @@ test("enforces a separately named test database without requiring a separate Mon
   }), /matches the effective production database/);
   assert.equal(validateTestDatabaseUri({
     MONGO_URI: "mongodb+srv://user:pass@prod-cluster.example/netflix_clone",
-    MONGO_TEST_URI: "mongodb+srv://user:pass@test-cluster.example/netflix_clone_test",
+    MONGO_TEST_URI: "mongodb://127.0.0.1:27018/netflix_clone_test",
   }).target.databaseName, "netflix_clone_test");
   assert.throws(() => validateTestDatabaseUri({ MONGO_TEST_URI: "mongodb+srv://user:pass@same-cluster.example" }), /explicit database name/);
   assert.throws(() => validateTestDatabaseUri({

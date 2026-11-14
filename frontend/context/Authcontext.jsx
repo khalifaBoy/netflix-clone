@@ -3,6 +3,10 @@
 import { createContext, useState, useEffect, useContext, useRef } from "react";
 import { api } from "@/lib/api";
 import { setActiveProfileScope, setUnauthorizedHandler } from "@/lib/axios";
+import {
+  registerCrossTabLogoutListener,
+  revokeRegisteredPlaybackSessions,
+} from "@/lib/playback-session-coordinator.mjs";
 
 const AuthContext = createContext();
 
@@ -30,6 +34,17 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(false);
   const profileSwitchInProgress = useRef(false);
+  const authTokenRef = useRef(null);
+
+  useEffect(() => registerCrossTabLogoutListener(() => {
+    void revokeRegisteredPlaybackSessions(authTokenRef.current || undefined);
+    authTokenRef.current = null;
+    clearStoredAuth();
+    setActiveProfileScope(null);
+    setUser(null);
+    setProfiles([]);
+    setSelectedProfile(null);
+  }), []);
 
   useEffect(() => {
     const handleUnauthorized = () => {
@@ -47,6 +62,7 @@ export const AuthProvider = ({ children }) => {
     const loadAuth = async () => {
       try {
         const storedToken = localStorage.getItem("token");
+        authTokenRef.current = storedToken;
         if (!storedToken) {
           clearStoredAuth();
           setActiveProfileScope(null);
@@ -84,6 +100,7 @@ export const AuthProvider = ({ children }) => {
       } catch {
         if (!mounted) return;
         clearStoredAuth();
+        authTokenRef.current = null;
         setActiveProfileScope(null);
         setUser(null);
         setProfiles([]);
@@ -103,6 +120,7 @@ export const AuthProvider = ({ children }) => {
     const userProfiles = Array.isArray(data.profiles) ? data.profiles : [];
     const firstProfile = userProfiles.find((profile) => profile?.isActive !== false) || null;
     localStorage.setItem("token", data.token);
+    authTokenRef.current = data.token;
     localStorage.setItem("user", JSON.stringify(data.user));
     localStorage.setItem("profiles", JSON.stringify(userProfiles));
     setUser(data.user);
@@ -146,6 +164,9 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
+    const token = localStorage.getItem("token");
+    void revokeRegisteredPlaybackSessions(token);
+    authTokenRef.current = null;
     clearStoredAuth();
     setActiveProfileScope(null);
     setUser(null);

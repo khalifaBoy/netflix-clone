@@ -165,6 +165,32 @@ test("creates and updates progress, derives sticky completion, and does not infl
   assert.equal(replay.watchCount, 0);
 });
 
+test("a saved progress write appears in Continue Watching only for its owning profile", async () => {
+  const created = fixture();
+  const owner = await createIdentity(created);
+  const otherProfile = await createIdentity(created);
+  const movie = await createMovie(created, { durationSeconds: 120 });
+
+  const saved = await api(`/${movie._id}/progress`, owner.token, {
+    method: "PUT",
+    body: progress(owner.profile._id, 37),
+  });
+  assert.equal(saved.status, 200);
+  assert.equal((await saved.json()).history.progressSeconds, 37);
+
+  const ownerFeed = await api(`/continue?profileId=${owner.profile._id}`, owner.token);
+  const ownerBody = await ownerFeed.json();
+  assert.equal(ownerBody.success, true);
+  assert.equal(ownerBody.history.length, 1);
+  assert.equal(String(ownerBody.history[0].movie._id), String(movie._id));
+  assert.equal(ownerBody.history[0].progressSeconds, 37);
+
+  const otherFeed = await api(`/continue?profileId=${otherProfile.profile._id}`, otherProfile.token);
+  const otherBody = await otherFeed.json();
+  assert.equal(otherBody.success, true);
+  assert.deepEqual(otherBody.history, []);
+});
+
 test("unknown catalog duration accepts progress without automatic completion", async () => {
   const created = fixture();
   const identity = await createIdentity(created);

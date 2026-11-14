@@ -1,26 +1,11 @@
-import mongoose from "mongoose";
-
 import Watchlist from "../models/Watchlist.js";
 import Movie from "../models/Movie.js";
-import Profile from "../models/Profile.js";
-
-/*
-|--------------------------------------------------------------------------
-| VERIFY PROFILE
-|--------------------------------------------------------------------------
-*/
-
-const getUserProfile = async (profileId, userId) => {
-  if (!mongoose.Types.ObjectId.isValid(profileId)) {
-    return null;
-  }
-
-  return Profile.findOne({
-    _id: profileId,
-    user: userId,
-    isActive: true,
-  });
-};
+import ApiError from "../utils/ApiError.js";
+import {
+  getAllowedMovieMaturityRatings,
+  isMovieAllowedByMaturity,
+  requireProfileMaturityPolicy,
+} from "../services/maturity-policy.service.js";
 
 /*
 |--------------------------------------------------------------------------
@@ -39,26 +24,24 @@ export const getWatchlist = async (req, res, next) => {
       });
     }
 
-    const profile = await getUserProfile(profileId, req.user._id);
-
-    if (!profile) {
-      return res.status(404).json({
-        success: false,
-        message: "Profile not found",
-      });
-    }
+    const policy = await requireProfileMaturityPolicy(profileId, req.user._id);
+    const allowedRatings = getAllowedMovieMaturityRatings(policy);
 
     const watchlist = await Watchlist.find({
       profile: profileId,
     })
-      .populate("movie")
+      .populate({
+        path: "movie",
+        match: { isPublished: true, maturityRating: { $in: allowedRatings } },
+      })
       .sort({
         addedAt: -1,
       });
+    const visibleWatchlist = watchlist.filter((item) => item.movie);
 
     return res.status(200).json({
       success: true,
-      watchlist,
+      watchlist: visibleWatchlist,
     });
   } catch (error) {
     return next(error);
@@ -83,21 +66,7 @@ export const addToWatchlist = async (req, res, next) => {
       });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(movieId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid movie ID",
-      });
-    }
-
-    const profile = await getUserProfile(profileId, req.user._id);
-
-    if (!profile) {
-      return res.status(404).json({
-        success: false,
-        message: "Profile not found",
-      });
-    }
+    const policy = await requireProfileMaturityPolicy(profileId, req.user._id);
 
     const movie = await Movie.findOne({
       _id: movieId,
@@ -109,6 +78,10 @@ export const addToWatchlist = async (req, res, next) => {
         success: false,
         message: "Movie not found",
       });
+    }
+
+    if (!isMovieAllowedByMaturity(policy, movie.maturityRating)) {
+      throw new ApiError(404, "MOVIE_NOT_FOUND", "Movie not found");
     }
 
     const existing = await Watchlist.findOne({
@@ -159,14 +132,7 @@ export const removeFromWatchlist = async (req, res, next) => {
       });
     }
 
-    const profile = await getUserProfile(profileId, req.user._id);
-
-    if (!profile) {
-      return res.status(404).json({
-        success: false,
-        message: "Profile not found",
-      });
-    }
+    await requireProfileMaturityPolicy(profileId, req.user._id);
 
     const deleted = await Watchlist.findOneAndDelete({
       profile: profileId,
